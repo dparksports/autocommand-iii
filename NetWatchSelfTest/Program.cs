@@ -86,11 +86,11 @@ SysmonArchiveService.ArchiveDirectory = tempRoot;
 var day1 = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
 var day2 = new DateTime(2026, 1, 2, 10, 0, 0, DateTimeKind.Utc);
 
-var e1 = new SysmonArchiveService.ArchiveEvent { TsUtc = day1, Eid = 1, RecordId = 101, Data = new() { ["ProcessId"] = "111", ["Image"] = @"C:\temp\alpha.exe", ["CommandLine"] = "alpha --one" } };
-var e2 = new SysmonArchiveService.ArchiveEvent { TsUtc = day1.AddHours(1), Eid = 3, RecordId = 102, Data = new() { ["ProcessId"] = "111", ["DestinationIp"] = "8.8.8.8", ["Image"] = @"C:\temp\alpha.exe" } };
-var e3 = new SysmonArchiveService.ArchiveEvent { TsUtc = day1.AddHours(2), Eid = 1, RecordId = 103, Data = new() { ["ProcessId"] = "222", ["Image"] = @"C:\temp\beta.exe", ["CommandLine"] = "beta --two" } };
-var e4 = new SysmonArchiveService.ArchiveEvent { TsUtc = day2, Eid = 1, RecordId = 104, Data = new() { ["ProcessId"] = "111", ["Image"] = @"C:\temp\alpha.exe", ["CommandLine"] = "alpha --again" } };
-var e5 = new SysmonArchiveService.ArchiveEvent { TsUtc = day2.AddMinutes(5), Eid = 1, RecordId = 105, Data = new() { ["ProcessId"] = "333", ["Image"] = @"C:\temp\gamma.exe" } };
+var e1 = new ArchiveEvent { TsUtc = day1, Eid = 1, RecordId = 101, Data = new() { ["ProcessId"] = "111", ["Image"] = @"C:\temp\alpha.exe", ["CommandLine"] = "alpha --one" } };
+var e2 = new ArchiveEvent { TsUtc = day1.AddHours(1), Eid = 3, RecordId = 102, Data = new() { ["ProcessId"] = "111", ["DestinationIp"] = "8.8.8.8", ["Image"] = @"C:\temp\alpha.exe" } };
+var e3 = new ArchiveEvent { TsUtc = day1.AddHours(2), Eid = 1, RecordId = 103, Data = new() { ["ProcessId"] = "222", ["Image"] = @"C:\temp\beta.exe", ["CommandLine"] = "beta --two" } };
+var e4 = new ArchiveEvent { TsUtc = day2, Eid = 1, RecordId = 104, Data = new() { ["ProcessId"] = "111", ["Image"] = @"C:\temp\alpha.exe", ["CommandLine"] = "alpha --again" } };
+var e5 = new ArchiveEvent { TsUtc = day2.AddMinutes(5), Eid = 1, RecordId = 105, Data = new() { ["ProcessId"] = "333", ["Image"] = @"C:\temp\gamma.exe" } };
 
 foreach (var e in new[] { e1, e2, e3, e4, e5 }) SysmonArchiveService.Append(e);
 
@@ -107,7 +107,7 @@ var (_, totalAfterDupes) = SysmonArchiveService.StatusSummary();
 Check("dedupe kept the count at 5", totalAfterDupes == 5, totalAfterDupes.ToString());
 
 // exact-tie boundary: same ts as watermark, higher record id — appended
-var e6 = new SysmonArchiveService.ArchiveEvent { TsUtc = day2.AddMinutes(5), Eid = 3, RecordId = 106, Data = new() { ["ProcessId"] = "333", ["DestinationIp"] = "1.1.1.1" } };
+var e6 = new ArchiveEvent { TsUtc = day2.AddMinutes(5), Eid = 3, RecordId = 106, Data = new() { ["ProcessId"] = "333", ["DestinationIp"] = "1.1.1.1" } };
 Check("same-ts-higher-rid append is accepted", SysmonArchiveService.Append(e6));
 
 // search: newest-first, filters, cap

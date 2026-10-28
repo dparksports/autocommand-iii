@@ -17,10 +17,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\core\AutoCommand.Forensics.Core\AutoCommand.Forensics.Core.csproj" />
     <Content Include="..\Assets\known-tasks.json" Link="Assets\known-tasks.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

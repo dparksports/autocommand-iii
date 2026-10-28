@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AutoCommand.Engines.Bridge</RootNamespace>
+    <Version>2026.10.26.2</Version>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Engines.Core\Engines.Core.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Tools.fs" />
+    <Compile Include="Bridge.fs" />
+    <Compile Include="Registration.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- the C# facade forwards the internal test seam -->
+    <InternalsVisibleTo Include="AutoCommand.Agent.Core" />
+    <InternalsVisibleTo Include="ProxyInstallSelfTest" />
+  </ItemGroup>
+</Project>

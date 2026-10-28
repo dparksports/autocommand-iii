@@ -83,8 +83,8 @@ namespace AutoCommand.Views
                 if (legacy > 0)
                 {
                     StatusText.Text = $"Migrating {legacy} legacy firewall rule(s) to the current naming scheme…";
-                    var r = await FirewallService.Instance.ConsolidateLegacyIpBlocksAsync();
-                    _migrationNote = $"Auto-migrated {r.migratedOutbound} legacy rule(s) ({r.removedInbound} redundant inbound rules removed) across {r.targets} target(s). ";
+                    var (targets, removedInbound, migratedOutbound) = await FirewallService.Instance.ConsolidateLegacyIpBlocksAsync();
+                    _migrationNote = $"Auto-migrated {migratedOutbound} legacy rule(s) ({removedInbound} redundant inbound rules removed) across {targets} target(s). ";
                 }
                 await ReloadAsync();
             };
@@ -284,7 +284,7 @@ namespace AutoCommand.Views
         {
             if (MessageBox.Show("Re-enable ALL AutoCommand block rules? (Undoes 'Restore Internet'.)",
                     "Re-enable", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            var res = await FirewallService.Instance.SetAllAutoCommandBlocksEnabledAsync(true);
+            var res = await FirewallService.Instance.SetAllBlocksEnabledAsync(true);
             StatusText.Text = $"Re-enabled AutoCommand blocks ({res.Changed} rule(s) changed).";
             await ReloadAsync();
         }
@@ -305,7 +305,7 @@ namespace AutoCommand.Views
             if (MessageBox.Show(preview.ToString(), "Restore except Microsoft/Windows ⚠",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
-            var res = await FirewallService.Instance.SetAllAutoCommandBlocksEnabledAsync(true, skipRisky: true);
+            var res = await FirewallService.Instance.SetAllBlocksEnabledAsync(true, skipRisky: true);
             StatusText.Text = $"Restored {res.Changed} rule(s); kept {res.SkippedRisky} risky rule(s) disabled.";
             await ReloadAsync();
         }

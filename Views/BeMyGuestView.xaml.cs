@@ -1,5 +1,8 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
+using AutoCommand.Engines.Bridge;
+using AgentBridgeService = AutoCommand.Agent.Core.AgentBridgeService;
+using McpClientCatalog = AutoCommand.Agent.Core.McpClientCatalog;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
 using AutoCommand.Intercept.Core;
@@ -97,7 +100,7 @@ namespace AutoCommand.Views
                 ? $"Session ACTIVE · 127.0.0.1:{bridge.Port} · client: {bridge.ClientName} · {bridge.ConnectedCalls} call(s)"
                 : "Session off. The assistant can connect but every tool answers 'start the session'.";
 
-            AgentActivityList.ItemsSource = AgentBridgeService.RecentActivity(30)
+            AgentActivityList.ItemsSource = AgentBridgeService.Instance.RecentActivity(30)
                 .Select(l => l.Length > 160 ? l[..160] + "…" : l)
                 .ToList();
         }
@@ -232,8 +235,8 @@ namespace AutoCommand.Views
             // refresh; nothing is rewritten silently.
             try
             {
-                var stale = McpClientCatalog.FindStaleRegistrations(
-                    McpClientCatalog.ResolveAndInstallProxy().ProxyPath);
+                var (currentProxy, _) = McpClientCatalog.ResolveAndInstallProxy();
+                var stale = McpClientCatalog.FindStaleRegistrations(currentProxy);
                 if (stale.Count > 0) AgentClientsPanel.Children.Insert(0, StaleBanner(stale));
             }
             catch { /* the scan is advisory — never block the tab */ }
@@ -242,7 +245,7 @@ namespace AutoCommand.Views
         /// <summary>One-line offer above the Register buttons: N stale
         /// registrations + the button that repairs them via the same
         /// resolve → preflight → Register path as a manual click.</summary>
-        private UIElement StaleBanner(List<McpClientCatalog.StaleMcpRegistration> stale)
+        private UIElement StaleBanner(List<AutoCommand.Engines.Bridge.StaleMcpRegistration> stale)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
             row.Children.Add(new TextBlock
@@ -265,7 +268,7 @@ namespace AutoCommand.Views
             return row;
         }
 
-        private void RefreshStaleRegistrations(List<McpClientCatalog.StaleMcpRegistration> stale)
+        private void RefreshStaleRegistrations(List<AutoCommand.Engines.Bridge.StaleMcpRegistration> stale)
         {
             var (proxy, installNote) = McpClientCatalog.ResolveAndInstallProxy();
             if (proxy == null)
@@ -349,7 +352,7 @@ namespace AutoCommand.Views
 
         private void CopyAgentConfigBtn_Click(object sender, RoutedEventArgs e)
         {
-            string proxy = McpClientCatalog.ResolveAndInstallProxy().ProxyPath
+            string proxy = McpClientCatalog.ResolveAndInstallProxy().Item1
                 ?? "%LOCALAPPDATA%\\AutoCommand\\tools\\AutoCommand.AgentProxy.exe";
             string config =
                 "{\n  \"mcp\": {\n    \"servers\": {\n      \"autocommand\": {\n" +

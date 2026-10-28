@@ -217,7 +217,7 @@ BlockHitFeedService.HitAggregate CAgg(string image, int pid, string ip, int coun
             DestIp = ip, DestPort = 443, MatchKind = kind,
             Count = count, FirstUtc = first, LastUtc = last };
 
-var cInv = new List<FirewallService.BlockedTarget>
+var cInv = new List<BlockedTarget>
 {
     new() { Target = "1.2.3.4", Kind = "ip", Ip = "1.2.3.4", Rules = 1, EnabledRules = 1, Created = cT0 },
     new() { Target = "5.6.7.8", Kind = "ip", Ip = "5.6.7.8", Rules = 1, EnabledRules = 1, Created = cT0 },
@@ -254,7 +254,7 @@ Check("containment: socket owner started after block → leak",
 var cV4 = BlockContainmentVerifier.Evaluate(
     new() { CAgg(@"C:\Tools\b.exe", 400, "5.6.7.8", 4, cT0.AddMinutes(1), cNow.AddMinutes(-1)) },
     cInv, new(),
-    new() { new AutoCommand.Models.TransmissionRecord { Pid = 400, Image = @"C:\Tools\b.exe",
+    new() { new TransmissionRecord { Pid = 400, Image = @"C:\Tools\b.exe",
              RemoteIp = "5.6.7.8", TsUtc = cT0.AddMinutes(30), ClientBytes = 5_000, ServerBytes = 1_000 } });
 Check("containment: archived bytes to blocked IP after t0 → leak",
       cV4[0].Verdict == BlockContainmentVerifier.Leak && cV4[0].BytesSinceT0 == 6_000,
@@ -263,7 +263,7 @@ Check("containment: archived bytes to blocked IP after t0 → leak",
 var cV5 = BlockContainmentVerifier.Evaluate(
     new() { CAgg(@"C:\Tools\b.exe", 410, "5.6.7.8", 4, cT0.AddMinutes(1), cNow.AddMinutes(-1)) },
     cInv, new(),
-    new() { new AutoCommand.Models.TransmissionRecord { Pid = 410, Image = @"C:\Tools\b.exe",
+    new() { new TransmissionRecord { Pid = 410, Image = @"C:\Tools\b.exe",
              RemoteIp = "203.0.113.9", TsUtc = cT0.AddMinutes(30), ClientBytes = 9_000, ServerBytes = 0 } });
 Check("containment: ip-block, bytes to unblocked IP stay allowed",
       cV5[0].Verdict == BlockContainmentVerifier.Contained, cV5[0].Verdict);
@@ -287,7 +287,7 @@ Check("containment: reused-pid socket flagged, never accused",
 var cV8 = BlockContainmentVerifier.Evaluate(
     new() { CAgg(@"C:\Tools\upd.exe", 600, "8.8.8.8", 2, cT0.AddMinutes(5), cNow.AddMinutes(-5), kind: "app") },
     cInv, new(),
-    new() { new AutoCommand.Models.TransmissionRecord { Pid = 600, Image = @"C:\Tools\other.exe",
+    new() { new TransmissionRecord { Pid = 600, Image = @"C:\Tools\other.exe",
              RemoteIp = "8.8.8.8", TsUtc = cT0.AddMinutes(30), ClientBytes = 9_999, ServerBytes = 0 } });
 Check("containment: archive join requires image match",
       cV8[0].Verdict == BlockContainmentVerifier.Contained, cV8[0].Verdict);
@@ -342,7 +342,7 @@ Check("roll-up: untouched target is quiet (null)",
 
 // QuietTargets — the engine-owned quiet roll-up (the rule the bridge tool
 // applies; disabled rules are never listed because there is nothing to verify)
-var qInv = new List<FirewallService.BlockedTarget>
+var qInv = new List<BlockedTarget>
 {
     new() { Target = "5.6.7.8", Kind = "ip", Ip = "5.6.7.8", Rules = 2, EnabledRules = 2 },
     new() { Target = "9.9.9.9", Kind = "ip", Ip = "9.9.9.9", Rules = 2, EnabledRules = 2 },

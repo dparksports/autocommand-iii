@@ -86,7 +86,7 @@ namespace AutoCommand.Contain.Core
         /// path, or the exe name (a blocked name at a sibling path still
         /// counts). Public so the handler's quiet-target roll-up agrees with
         /// the instance join.</summary>
-        public static bool IsAppBlockMatch(FirewallService.BlockedTarget t, string image)
+        public static bool IsAppBlockMatch(BlockedTarget t, string image)
         {
             if (t?.Kind != "app" || string.IsNullOrEmpty(image)) return false;
             return string.Equals(t.AppPath, image, StringComparison.OrdinalIgnoreCase) ||
@@ -130,8 +130,8 @@ namespace AutoCommand.Contain.Core
         /// consumer apply one rule (the same reason IsAppBlockMatch is
         /// public). Disabled/paused rules are never listed: nothing to
         /// verify. The caller supplies presentation (JSON, rows).</summary>
-        public static List<FirewallService.BlockedTarget> QuietTargets(
-            List<FirewallService.BlockedTarget> inventory, List<Instance> instances)
+        public static List<BlockedTarget> QuietTargets(
+            List<BlockedTarget> inventory, List<Instance> instances)
         {
             var hitIps = instances.SelectMany(i => i.BlockedIps)
                                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -139,7 +139,7 @@ namespace AutoCommand.Contain.Core
             return inventory.Where(t => t.EnabledRules > 0 && !Referenced(t, hitIps, hitImages)).ToList();
         }
 
-        private static bool Referenced(FirewallService.BlockedTarget t,
+        private static bool Referenced(BlockedTarget t,
                                        HashSet<string> hitIps, List<string> hitImages) =>
             t.Kind == "ip"
                 ? hitIps.Contains(t.Ip)
@@ -147,9 +147,9 @@ namespace AutoCommand.Contain.Core
 
         public static List<Instance> Evaluate(
             List<BlockHitFeedService.HitAggregate> hits,
-            List<FirewallService.BlockedTarget> inventory,
+            List<BlockedTarget> inventory,
             List<LiveSocket> sockets,
-            List<Models.TransmissionRecord> flows)
+            List<TransmissionRecord> flows)
         {
             var activeIp = new HashSet<string>(
                 inventory.Where(t => t.Kind == "ip" && t.EnabledRules > 0 && !string.IsNullOrEmpty(t.Ip))

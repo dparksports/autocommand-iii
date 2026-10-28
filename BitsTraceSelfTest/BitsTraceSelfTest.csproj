@@ -18,10 +18,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- All engines now from the Forensics core library (phase 4
          extraction, REWRITE.md) — this harness exercises the shipped
          assembly; no source copies remain here. -->
     <ProjectReference Include="..\core\AutoCommand.Forensics.Core\AutoCommand.Forensics.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

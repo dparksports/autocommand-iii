@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -49,7 +49,7 @@ namespace AutoCommand.Views
         private bool _bigOnly = true;
 
         private TransmissionRecord _selected;
-        private List<HttpStreamDecoder.HttpMessage> _messages = new();
+        private List<HttpMessage> _messages = new();
         private DateTime _archiveStatusAt = DateTime.MinValue;
         private (int Days, long Bytes) _archiveStatus;
         private System.Windows.Threading.DispatcherTimer _bannerTimer;
@@ -309,12 +309,12 @@ namespace AutoCommand.Views
             byte[] request, response;
             if (!_pipeline.TryGetBodies(record.Id, out request, out response) && record.HasContent)
             {
-                var loaded = _pipeline.LoadFromArchive(record);
-                request = loaded.Request;
-                response = loaded.Response;
+                var (loadedRequest, loadedResponse) = _pipeline.LoadFromArchive(record);
+                request = loadedRequest;
+                response = loadedResponse;
             }
 
-            var messages = new List<HttpStreamDecoder.HttpMessage>();
+            var messages = new List<HttpMessage>();
             messages.AddRange(HttpStreamDecoder.Decode(request, fromClient: true, alpn: record.Alpn));
             messages.AddRange(HttpStreamDecoder.Decode(response, fromClient: false, alpn: record.Alpn));
             _messages = messages;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -254,8 +254,8 @@ namespace AutoCommand.Views
 
             MonitorStatusText.Text = "Downloading and configuring Sysmon... please wait.";
 
-            var result = await _installerService.InstallAndConfigureAsync();
-            if (result.Success)
+            var (installOk, installError) = await _installerService.InstallAndConfigureAsync();
+            if (installOk)
             {
                 MessageBox.Show("Sysmon has been successfully installed and configured for network tracking.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 CheckSysmonStatus();
@@ -263,7 +263,7 @@ namespace AutoCommand.Views
             }
             else
             {
-                MessageBox.Show($"Failed to install Sysmon.\n\nDetails: {result.ErrorMessage}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Failed to install Sysmon.\n\nDetails: {installError}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 SetupSysmonBtn.IsEnabled = true;
                 MonitorStatusText.Text = "Sysmon is not installed — install it from the Sysmon Audit tab. Network tracking will not work.";
             }
@@ -286,9 +286,9 @@ namespace AutoCommand.Views
             }
 
             MonitorStatusText.Text = "Repairing Sysmon... removing leftovers and reinstalling.";
-            var repaired = await _installerService.RepairAsync();
+            var (repairedOk, repairedError, rebootRequired) = await _installerService.RepairAsync();
 
-            if (repaired.Success)
+            if (repairedOk)
             {
                 MessageBox.Show("Sysmon repair completed and verified. No restart was needed.", "Repair complete", MessageBoxButton.OK, MessageBoxImage.Information);
                 CheckSysmonStatus();
@@ -296,7 +296,7 @@ namespace AutoCommand.Views
                 return;
             }
 
-            if (repaired.RebootRequired)
+            if (rebootRequired)
             {
                 var restart = MessageBox.Show(
                     "Windows still holds the stale Sysmon registration; it can only be cleared during a restart.\n\n" +
@@ -319,7 +319,7 @@ namespace AutoCommand.Views
                 return;
             }
 
-            MessageBox.Show($"Sysmon repair failed.\n\nDetails: {repaired.ErrorMessage}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Sysmon repair failed.\n\nDetails: {repairedError}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             SetupSysmonBtn.IsEnabled = true;
             MonitorStatusText.Text = "Sysmon is not installed. Network tracking will not work.";
         }
@@ -1431,11 +1431,11 @@ namespace AutoCommand.Views
         /// start-time window ±5 s AND image match &gt; window &gt; image —
         /// ties keep the newest record (the list comes newest-first).
         /// </summary>
-        private static SysmonArchiveService.ArchiveEvent PickBestCreateRecord(
-            List<SysmonArchiveService.ArchiveEvent> records, SvchostMonitorItem item)
+        private static ArchiveEvent PickBestCreateRecord(
+            List<ArchiveEvent> records, SvchostMonitorItem item)
         {
             if (records == null || records.Count == 0) return null;
-            SysmonArchiveService.ArchiveEvent best = null;
+            ArchiveEvent best = null;
             int bestScore = -1;
             foreach (var rec in records)
             {

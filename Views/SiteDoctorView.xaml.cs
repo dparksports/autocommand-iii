@@ -72,8 +72,8 @@ namespace AutoCommand.Views
         {
             try
             {
-                var rows = TransmissionsArchiveService.Read(max: 2000,
-                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24));
+                var rows = RowAdapter.ToRows(TransmissionsArchiveService.Read(max: 2000,
+                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24)));
                 _controlPool = SiteFingerprintService.TopHosts(rows, 25);
                 _browsers = SiteFingerprintService.BrowsersSeen(rows);
 
@@ -163,8 +163,8 @@ namespace AutoCommand.Views
             IEnumerable<string> tail;
             try
             {
-                var rows = TransmissionsArchiveService.Read(max: 2000,
-                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24));
+                var rows = RowAdapter.ToRows(TransmissionsArchiveService.Read(max: 2000,
+                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24)));
                 tail = filter == "★ Pinned sites"
                     ? Enumerable.Empty<string>()
                     : SiteFingerprintService.TopHosts(rows, 25,
@@ -242,8 +242,8 @@ namespace AutoCommand.Views
             try
             {
                 // Passive half: everything the archive knows about this host.
-                var rows = TransmissionsArchiveService.Read(max: 4000,
-                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24));
+                var rows = RowAdapter.ToRows(TransmissionsArchiveService.Read(max: 4000,
+                    sinceUtc: DateTime.UtcNow - TimeSpan.FromHours(24)));
                 var siteRows = rows
                     .Where(r => string.Equals(r.Sni, host, StringComparison.OrdinalIgnoreCase))
                     .ToList();
@@ -301,24 +301,24 @@ namespace AutoCommand.Views
             }
         }
 
-        private void ShowVerdict(SiteVerdictService.Verdict verdict, SiteProbeService.SiteProbeReport report)
+        private void ShowVerdict(Verdict verdict, SiteProbeReport report)
         {
             VerdictHeadline.Text = verdict.Headline;
             VerdictNextStep.Text = "→ " + verdict.NextStep;
 
             (Brush bg, Brush border, Brush fg) = verdict.Kind switch
             {
-                SiteVerdictService.VerdictKind.Blocked =>
+                VerdictKind.Blocked =>
                     (Hex("#3A1414"), Hex("#E5534B"), Hex("#FF8A80")),
-                SiteVerdictService.VerdictKind.DependencyBlocked =>
+                VerdictKind.DependencyBlocked =>
                     (Hex("#3A1414"), Hex("#E5534B"), Hex("#FF8A80")),
-                SiteVerdictService.VerdictKind.LocalTlsBroken =>
+                VerdictKind.LocalTlsBroken =>
                     (Hex("#3A1414"), Hex("#E5534B"), Hex("#FF8A80")),
-                SiteVerdictService.VerdictKind.HandshakeDropping =>
+                VerdictKind.HandshakeDropping =>
                     (Hex("#3A2E14"), Hex("#E5A631"), Hex("#E5A631")),
-                SiteVerdictService.VerdictKind.Steering =>
+                VerdictKind.Steering =>
                     (Hex("#14243A"), Hex("#4A9EFF"), Hex("#7FB8FF")),
-                SiteVerdictService.VerdictKind.FarAway =>
+                VerdictKind.FarAway =>
                     (Hex("#2E1A3A"), Hex("#B07CE5"), Hex("#CDA9F0")),
                 _ => (Hex("#122A1A"), Hex("#3FB950"), Hex("#7EE2A8")),
             };
@@ -346,9 +346,9 @@ namespace AutoCommand.Views
         /// the login-failure shape where the site is fine but an address the
         /// page depends on was silently blocked mid-visit.
         /// </summary>
-        private void MarkAutoCommandBlocked(SiteVerdictService.Verdict verdict,
-            SiteProbeService.SiteProbeReport report,
-            DependencyBlockService.Report dependency)
+        private void MarkAutoCommandBlocked(Verdict verdict,
+            SiteProbeReport report,
+            Report dependency)
         {
             try
             {
@@ -363,7 +363,7 @@ namespace AutoCommand.Views
                     .Distinct()
                     .Where(IsBlocked)
                     .ToList();
-                var deps = (dependency?.InWindow ?? new List<DependencyBlockService.Hit>())
+                var deps = (dependency?.InWindow ?? new List<Hit>())
                     .Select(h => h.Ip)
                     .Where(ip => !string.IsNullOrEmpty(ip))
                     .Distinct(System.StringComparer.OrdinalIgnoreCase)

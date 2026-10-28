@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Windows;
 
 using AutoCommand.Agent.Core;
@@ -69,6 +69,12 @@ namespace AutoCommand
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // The F# watch engines are app-agnostic: give them AutoCommand's
+            // identity (data root, rule prefixes, port base) before anything
+            // touches them (same call autoscope makes at startup).
+            AutoCommand.Engines.Watch.WatchConfig.Configure(
+                AutoCommand.Engines.Core.Identity.autocommand());
 
             // ── headless agent mode (no UI, no dialogs, no theme) ────────
             // --agent-headless [sec]
@@ -164,11 +170,13 @@ namespace AutoCommand
             // code: telemetry/ in the repository.
             _ = Services.UsagePingService.RunStartupFlowAsync();
 
-            // The agent bridge's confirmation seam: mutating AI-session
-            // asks show the AgentConfirmWindow dialog at the app's UI.
-            // Headless hosts never install one — their mutating tools are
-            // denied with the plain-language note, exactly as before.
-            AgentBridgeService.Interaction = new Services.WpfAgentInteraction();
+            // The F# bridge engine + the app's tool surface, then the WPF
+            // confirm seam: mutating AI-session asks show the
+            // AgentConfirmWindow dialog at the app's UI. Headless hosts Wire
+            // without a Ui — their mutating tools are denied with the
+            // plain-language note, exactly as before.
+            Agent.Core.BridgeHost.Wire();
+            AutoCommand.Engines.Bridge.AgentBridgeService.Ui = new Services.AgentBridgeUI();
 
             // Auto-started AI session (opt-in from Settings → AI access): the
             // consent was given once at the checkbox; every launch honors it.

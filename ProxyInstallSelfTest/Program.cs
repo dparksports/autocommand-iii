@@ -1,4 +1,4 @@
-// ProxyInstallSelfTest — drives McpClientRegistration's install decision
+﻿// ProxyInstallSelfTest — drives McpClientRegistration's install decision
 // logic (the versioned-refresh + lock + fallback rules) against synthetic
 // directories, no WPF and no elevation needed.
 //
@@ -18,6 +18,9 @@
 //                 skips unregistered/malformed; Register repairs.
 using System.Diagnostics;
 using AutoCommand.Agent.Core;
+using AutoCommand.Engines.Bridge;
+using AgentBridgeService = AutoCommand.Agent.Core.AgentBridgeService;
+using McpClientCatalog = AutoCommand.Agent.Core.McpClientCatalog;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
 using AutoCommand.Intercept.Core;

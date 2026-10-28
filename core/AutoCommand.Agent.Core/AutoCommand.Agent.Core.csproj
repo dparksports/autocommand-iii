@@ -30,6 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The confirmation seam contract -->
     <ProjectReference Include="..\..\Sdk\AutoCommand.Sdk.csproj" />
     <!-- The registry's tools wrap every other core's engines -->
@@ -44,7 +48,28 @@
     <!-- Vendored identity engine behind the Contain core's svchost tools -->
     <ProjectReference Include="..\..\svchost-watch\SvchostAnalyzer.Core\SvchostAnalyzer.Core.csproj" />
     <!-- Event channels (Sysmon tail tools) -->
-    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Diagnosis" />
+    <Using Include="SiteVerdictService = AutoCommand.Engines.Diagnosis.SiteVerdict" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Core\Engines.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="IpClassifier = AutoCommand.Engines.Core.IpClassification" />
+
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Bridge\Engines.Bridge.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Bridge" />
+  </ItemGroup>
 </Project>

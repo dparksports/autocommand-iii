@@ -23,7 +23,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoCommand.Models;
 
 int failures = 0;
 void Check(string name, bool pass, string evidence = "")
@@ -32,16 +31,12 @@ void Check(string name, bool pass, string evidence = "")
     if (!pass) failures++;
 }
 
-static TransmissionRecord Rec(string sni, string ip, DateTime ts, long bytes = 12_000) => new()
-{
-    Sni = sni, RemoteIp = ip, TsUtc = ts, ClientBytes = bytes,
-    Image = @"C:\Program Files\Google\Chrome\Application\chrome.exe", Pid = 1000,
-};
+static TrafficRow Rec(string sni, string ip, DateTime ts, long bytes = 12_000) => new(
+    ts, 1000, @"C:\Program Files\Google\Chrome\Application\chrome.exe", "chrome.exe",
+    ip, 443, sni, bytes, 0);
 
-static TransmissionRecord RecAt(string sni, string ip, DateTime ts, string image, int pid) => new()
-{
-    Sni = sni, RemoteIp = ip, TsUtc = ts, ClientBytes = 12_000, Image = image, Pid = pid,
-};
+static TrafficRow RecAt(string sni, string ip, DateTime ts, string image, int pid) => new(
+    ts, pid, image, Path.GetFileName(image), ip, 443, sni, 12_000, 0);
 
 DateTime T0 = DateTime.UtcNow;
 
@@ -60,7 +55,7 @@ Check("dispersion: signal names the count",
 // ─────────────────────────────────────────────────────────────────────
 // 2. Fingerprint — 5-second burst (the retry-race signal)
 // ─────────────────────────────────────────────────────────────────────
-var burst = new List<TransmissionRecord>
+var burst = new List<TrafficRow>
 {
     Rec("chat.z.ai", "47.246.23.146", T0.AddSeconds(0)),
     Rec("chat.z.ai", "47.246.23.146", T0.AddSeconds(0.4)),
@@ -82,7 +77,7 @@ Check("churn: 5 same-edge connects within a minute", fpChurn.MaxSameEdgePerMinut
     $"got {fpChurn.MaxSameEdgePerMinute}");
 Check("churn: churn signal fired", fpChurn.Signals.Any(s => s.Contains("within a minute")));
 
-var calm = new List<TransmissionRecord>
+var calm = new List<TrafficRow>
 {
     Rec("api.github.com", "140.82.114.3", T0),
     Rec("api.github.com", "140.82.114.3", T0.AddMinutes(55)),
@@ -93,7 +88,7 @@ Check("calm site: no signals", !fpCalm.LooksStruggling, string.Join(" | ", fpCal
 // ─────────────────────────────────────────────────────────────────────
 // 4. Fingerprint — TopHosts + machine-wide baseline
 // ─────────────────────────────────────────────────────────────────────
-var mixed = new List<TransmissionRecord>(burst);
+var mixed = new List<TrafficRow>(burst);
 mixed.AddRange(calm);
 mixed.AddRange(Enumerable.Range(0, 9).Select(i => Rec("zcode.z.ai", "47.246.23.189", T0.AddMinutes(i))));
 var top = SiteFingerprintService.TopHosts(mixed, 10);
@@ -106,59 +101,59 @@ Check("BaselineEdgeCount: median across hosts", SiteFingerprintService.BaselineE
 // ─────────────────────────────────────────────────────────────────────
 // 5. Verdict rules — synthetic probe reports
 // ─────────────────────────────────────────────────────────────────────
-SiteProbeService.SiteProbeReport Report(
-    List<SiteProbeService.EdgeProbe> edges,
-    List<SiteProbeService.DnsSample> dns = null,
-    List<SiteProbeService.ControlProbe> controls = null) => new()
+SiteProbeReport Report(
+    List<EdgeProbe> edges,
+    List<DnsSample> dns = null,
+    List<ControlProbe> controls = null) => new()
 {
     Host = "test",
-    Dns = new SiteProbeService.DnsResult
+    Dns = new DnsResult
     {
         Host = "test",
-        Samples = dns ?? new List<SiteProbeService.DnsSample>
+        Samples = dns ?? new List<DnsSample>
             { new() { Ips = new List<string> { "1.2.3.4" } } },
     },
     Edges = edges,
-    Controls = controls ?? new List<SiteProbeService.ControlProbe>(),
+    Controls = controls ?? new List<ControlProbe>(),
 };
 
-var vBlocked = SiteVerdictService.Decide(null, Report(new List<SiteProbeService.EdgeProbe>
+var vBlocked = SiteVerdictService.Decide(null, Report(new List<EdgeProbe>
 {
     new() { Ip = "1.2.3.4", TcpError = "connection refused" },
     new() { Ip = "5.6.7.8", TcpError = "no TCP answer in 4000ms" },
 }));
-Check("verdict: all-TCP-failed → Blocked", vBlocked.Kind == SiteVerdictService.VerdictKind.Blocked, vBlocked.Kind.ToString());
+Check("verdict: all-TCP-failed → Blocked", vBlocked.Kind == VerdictKind.Blocked, vBlocked.Kind.ToString());
 
-var vDrop = SiteVerdictService.Decide(null, Report(new List<SiteProbeService.EdgeProbe>
+var vDrop = SiteVerdictService.Decide(null, Report(new List<EdgeProbe>
 {
     new() { Ip = "47.246.23.220", TcpConnectMs = 30, TlsPlainMs = 54, TlsPlainVersion = "Tls12", TlsDefaultError = "timeout" },
-}, controls: new List<SiteProbeService.ControlProbe> { new() { Host = "ctl", TcpConnectMs = 11, TlsMs = 15 } }));
-Check("verdict: split hello shapes → HandshakeDropping", vDrop.Kind == SiteVerdictService.VerdictKind.HandshakeDropping, vDrop.Kind.ToString());
+}, controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 11, TlsMs = 15 } }));
+Check("verdict: split hello shapes → HandshakeDropping", vDrop.Kind == VerdictKind.HandshakeDropping, vDrop.Kind.ToString());
 Check("verdict: headline names the DROPPED shape",
     vDrop.Headline.Contains("Windows-default handshake"), vDrop.Headline);
 
 var vSteer = SiteVerdictService.Decide(null, Report(
-    new List<SiteProbeService.EdgeProbe> { new() { Ip = "1.1.1.1", TcpConnectMs = 25, TlsDefaultMs = 50, TlsDefaultVersion = "Tls13", TlsPlainMs = 48, TlsPlainVersion = "Tls12" } },
-    dns: new List<SiteProbeService.DnsSample>
+    new List<EdgeProbe> { new() { Ip = "1.1.1.1", TcpConnectMs = 25, TlsDefaultMs = 50, TlsDefaultVersion = "Tls13", TlsPlainMs = 48, TlsPlainVersion = "Tls12" } },
+    dns: new List<DnsSample>
     {
         new() { Ips = new List<string> { "1.1.1.1" } },
         new() { Ips = new List<string> { "2.2.2.2" } },
         new() { Ips = new List<string> { "3.3.3.3" } },
     }));
-Check("verdict: rotating DNS → Steering", vSteer.Kind == SiteVerdictService.VerdictKind.Steering, vSteer.Kind.ToString());
+Check("verdict: rotating DNS → Steering", vSteer.Kind == VerdictKind.Steering, vSteer.Kind.ToString());
 
 var vFar = SiteVerdictService.Decide(null, Report(
-    new List<SiteProbeService.EdgeProbe> { new() { Ip = "9.9.9.9", TcpConnectMs = 210, TlsDefaultMs = 320, TlsDefaultVersion = "Tls13", TlsPlainMs = 300, TlsPlainVersion = "Tls12" } },
-    controls: new List<SiteProbeService.ControlProbe> { new() { Host = "ctl", TcpConnectMs = 10, TlsMs = 15 } }));
-Check("verdict: 20x control latency → FarAway", vFar.Kind == SiteVerdictService.VerdictKind.FarAway, vFar.Kind.ToString());
+    new List<EdgeProbe> { new() { Ip = "9.9.9.9", TcpConnectMs = 210, TlsDefaultMs = 320, TlsDefaultVersion = "Tls13", TlsPlainMs = 300, TlsPlainVersion = "Tls12" } },
+    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 10, TlsMs = 15 } }));
+Check("verdict: 20x control latency → FarAway", vFar.Kind == VerdictKind.FarAway, vFar.Kind.ToString());
 
 var vHealthy = SiteVerdictService.Decide(fpCalm, Report(
-    new List<SiteProbeService.EdgeProbe> { new() { Ip = "140.82.114.3", TcpConnectMs = 40, TlsDefaultMs = 60, TlsDefaultVersion = "Tls13", TlsPlainMs = 58, TlsPlainVersion = "Tls12" } },
-    controls: new List<SiteProbeService.ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } }));
-Check("verdict: fast + calm → Healthy", vHealthy.Kind == SiteVerdictService.VerdictKind.Healthy, vHealthy.Kind.ToString());
+    new List<EdgeProbe> { new() { Ip = "140.82.114.3", TcpConnectMs = 40, TlsDefaultMs = 60, TlsDefaultVersion = "Tls13", TlsPlainMs = 58, TlsPlainVersion = "Tls12" } },
+    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } }));
+Check("verdict: fast + calm → Healthy", vHealthy.Kind == VerdictKind.Healthy, vHealthy.Kind.ToString());
 
 var vNone = SiteVerdictService.Decide(null, null);
-Check("verdict: no evidence → Insufficient", vNone.Kind == SiteVerdictService.VerdictKind.Insufficient, vNone.Kind.ToString());
+Check("verdict: no evidence → Insufficient", vNone.Kind == VerdictKind.Insufficient, vNone.Kind.ToString());
 
 // ─────────────────────────────────────────────────────────────────────
 // 5b. Dependency-block join — "the site is fine, its dependency is
@@ -168,10 +163,10 @@ Check("verdict: no evidence → Insufficient", vNone.Kind == SiteVerdictService.
 // ─────────────────────────────────────────────────────────────────────
 DateTime T1 = DateTime.UtcNow.AddMinutes(-30);
 string braveExe = @"C:\Users\u\AppData\Local\BraveSoftware\Brave-Browser\Application\brave.exe";
-DependencyBlockService.BlockInfoLite Info(string ip, DateTime since) =>
-    new() { Class = "Unclassified", Created = since };
+BlockInfoLite Info(string ip, DateTime since) =>
+    new("Unclassified", since);
 
-var depRows = new List<TransmissionRecord>
+var depRows = new List<TrafficRow>
 {
     // The visit: browser 2000 loads the sign-in page and calls its API.
     RecAt("www.spectrum.net", "52.84.20.127", T1, braveExe, 2000),
@@ -183,18 +178,18 @@ var depRows = new List<TransmissionRecord>
     // A different browser's traffic — must not influence the join.
     RecAt("github.com", "140.82.116.3", T1.AddSeconds(1), @"C:\Program Files\Google\Chrome\Application\chrome.exe", 1000),
 };
-var depHits = new List<DependencyBlockService.BlockHitLite>
+var depHits = new List<BlockHitLite>
 {
     // In-window: 4s and 7s after the page load — the causal set.
-    new() { TimeUtc = T1.AddSeconds(4), Image = braveExe, Pid = 2000, DestIp = "142.251.34.67", MatchKind = "ip" },
-    new() { TimeUtc = T1.AddSeconds(7), Image = braveExe, Pid = 2000, DestIp = "142.251.34.67", MatchKind = "ip" },
+    new(T1.AddSeconds(4), braveExe, 2000, "142.251.34.67", "ip"),
+    new(T1.AddSeconds(7), braveExe, 2000, "142.251.34.67", "ip"),
     // Out of every visit window → context only, never the verdict.
-    new() { TimeUtc = T1.AddHours(-3), Image = braveExe, Pid = 2000, DestIp = "142.251.41.3", MatchKind = "ip" },
+    new(T1.AddHours(-3), braveExe, 2000, "142.251.41.3", "ip"),
     // Another process hitting a block — irrelevant to this site's story.
-    new() { TimeUtc = T1.AddSeconds(5), Image = @"C:\Windows\System32\svchost.exe", Pid = 999, DestIp = "142.251.99.99", MatchKind = "ip" },
+    new(T1.AddSeconds(5), @"C:\Windows\System32\svchost.exe", 999, "142.251.99.99", "ip"),
 };
 
-var dep = DependencyBlockService.Analyze("www.spectrum.net", depRows, depHits,
+var dep = DependencyAnalysis.Analyze("www.spectrum.net", depRows, depHits,
     ip => ip == "142.251.34.67" ? Info(ip, DateTime.UtcNow.AddDays(-3)) : null);
 Check("dep: one in-window address, attempts aggregated",
     dep.InWindow.Count == 1 && dep.InWindow[0].Ip == "142.251.34.67" && dep.InWindow[0].Attempts == 2,
@@ -209,23 +204,23 @@ Check("dep: other processes excluded from the join",
 Check("dep: co-visited dependency host found (the page's API)",
     dep.CoVisitedHosts.Contains("apis.spectrum.net"), string.Join(",", dep.CoVisitedHosts));
 
-var rot = DependencyBlockService.MeasureRotation("www.google.com",
+var rot = DependencyAnalysis.MeasureRotation("www.google.com",
     Enumerable.Range(0, 8).Select(i => $"142.251.{150 + i}.119").Concat(new[] { "142.251.34.67" }),
     ip => ip == "142.251.34.67" ? Info(ip, DateTime.UtcNow) : null);
 Check("dep: rotation counts blocked fraction", rot != null && rot.BlockedAddresses == 1 && rot.TotalAddresses == 9,
     rot == null ? "null" : $"{rot.BlockedAddresses}/{rot.TotalAddresses}");
 Check("dep: rotation null when nothing blocked",
-    DependencyBlockService.MeasureRotation("www.google.com", new[] { "1.1.1.1", "2.2.2.2" }, _ => null) == null);
+    DependencyAnalysis.MeasureRotation("www.google.com", new[] { "1.1.1.1", "2.2.2.2" }, _ => null) == null);
 
 // Healthy probe + in-window blocked dependency → DependencyBlocked, not Healthy.
-SiteProbeService.SiteProbeReport HealthyReport() => Report(new List<SiteProbeService.EdgeProbe>
+SiteProbeReport HealthyReport() => Report(new List<EdgeProbe>
 {
     new() { Ip = "52.84.20.127", TcpConnectMs = 40, TlsDefaultMs = 60, TlsDefaultVersion = "Tls13", TlsPlainMs = 58, TlsPlainVersion = "Tls12" },
-}, controls: new List<SiteProbeService.ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } });
+}, controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } });
 
 var vDep = SiteVerdictService.Decide(null, HealthyReport(), dep);
 Check("verdict: healthy site + blocked dependency → DependencyBlocked",
-    vDep.Kind == SiteVerdictService.VerdictKind.DependencyBlocked, vDep.Kind.ToString());
+    vDep.Kind == VerdictKind.DependencyBlocked, vDep.Kind.ToString());
 Check("verdict: headline names the blocked address and process",
     vDep.Headline.Contains("142.251.34.67") && vDep.Headline.Contains("brave.exe"), vDep.Headline);
 Check("verdict: evidence lists the hit with its served host",
@@ -233,16 +228,16 @@ Check("verdict: evidence lists the hit with its served host",
     string.Join(" | ", vDep.Evidence));
 
 // Honesty guard: nearby-only hits must NOT hijack a healthy verdict.
-var depNearbyOnly = DependencyBlockService.Analyze("www.spectrum.net", depRows,
-    new List<DependencyBlockService.BlockHitLite> { depHits[2] }, _ => null);
+var depNearbyOnly = DependencyAnalysis.Analyze("www.spectrum.net", depRows,
+    new List<BlockHitLite> { depHits[2] }, _ => null);
 var vStillHealthy = SiteVerdictService.Decide(null, HealthyReport(), depNearbyOnly);
 Check("verdict: nearby-only hits keep Healthy honest",
-    vStillHealthy.Kind == SiteVerdictService.VerdictKind.Healthy, vStillHealthy.Kind.ToString());
+    vStillHealthy.Kind == VerdictKind.Healthy, vStillHealthy.Kind.ToString());
 
 // And with no probe at all, the join stands on its own recorded evidence.
 var vDepNoProbe = SiteVerdictService.Decide(null, null, dep);
 Check("verdict: dependency evidence alone still fires",
-    vDepNoProbe.Kind == SiteVerdictService.VerdictKind.DependencyBlocked, vDepNoProbe.Kind.ToString());
+    vDepNoProbe.Kind == VerdictKind.DependencyBlocked, vDepNoProbe.Kind.ToString());
 
 // ─────────────────────────────────────────────────────────────────────
 // 6. LIVE dual-shape probe — loopback TLS server vs loopback black hole
@@ -350,16 +345,16 @@ Check("live: every operation was logged",
 // And the split pair produces the HandshakeDropping verdict, end to end.
 // Control numbers come from the live healthy server when this machine can
 // host TLS; otherwise synthetic (the mapping is what's under test).
-var vLive = SiteVerdictService.Decide(null, new SiteProbeService.SiteProbeReport
+var vLive = SiteVerdictService.Decide(null, new SiteProbeReport
 {
     Host = "localhost",
-    Dns = new SiteProbeService.DnsResult
+    Dns = new DnsResult
     {
         Host = "localhost",
-        Samples = new List<SiteProbeService.DnsSample> { new() { Ips = new List<string> { "127.0.0.1" } } },
+        Samples = new List<DnsSample> { new() { Ips = new List<string> { "127.0.0.1" } } },
     },
-    Edges = new List<SiteProbeService.EdgeProbe> { blackHoleEdge },
-    Controls = new List<SiteProbeService.ControlProbe>
+    Edges = new List<EdgeProbe> { blackHoleEdge },
+    Controls = new List<ControlProbe>
     {
         healthyTlsUnavailable
             ? new() { Host = "synthetic-ctl", TcpConnectMs = 5, TlsMs = 10 }
@@ -367,26 +362,26 @@ var vLive = SiteVerdictService.Decide(null, new SiteProbeService.SiteProbeReport
     },
 });
 Check("live: black-hole edge + healthy control → HandshakeDropping",
-    vLive.Kind == SiteVerdictService.VerdictKind.HandshakeDropping, vLive.Kind.ToString());
+    vLive.Kind == VerdictKind.HandshakeDropping, vLive.Kind.ToString());
 
 // And when the control fails the same way, the finger turns around and
 // points at the LOCAL stack — the LocalTlsBroken rule.
-var vLocalBroken = SiteVerdictService.Decide(null, new SiteProbeService.SiteProbeReport
+var vLocalBroken = SiteVerdictService.Decide(null, new SiteProbeReport
 {
     Host = "localhost",
-    Dns = new SiteProbeService.DnsResult
+    Dns = new DnsResult
     {
         Host = "localhost",
-        Samples = new List<SiteProbeService.DnsSample> { new() { Ips = new List<string> { "127.0.0.1" } } },
+        Samples = new List<DnsSample> { new() { Ips = new List<string> { "127.0.0.1" } } },
     },
-    Edges = new List<SiteProbeService.EdgeProbe> { blackHoleEdge },
-    Controls = new List<SiteProbeService.ControlProbe>
+    Edges = new List<EdgeProbe> { blackHoleEdge },
+    Controls = new List<ControlProbe>
     {
         new() { Host = "ctl", TcpConnectMs = 8, Error = "server never answered" },
     },
 });
 Check("live: all handshakes fail incl. control → LocalTlsBroken",
-    vLocalBroken.Kind == SiteVerdictService.VerdictKind.LocalTlsBroken, vLocalBroken.Kind.ToString());
+    vLocalBroken.Kind == VerdictKind.LocalTlsBroken, vLocalBroken.Kind.ToString());
 
 healthyListener.Stop();
 blackHoleListener.Stop();

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AutoCommand.Engines.Core</RootNamespace>
+    <Version>2026.10.26.2</Version>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- F# requires explicit compile order — the SDK does not glob .fs files -->
+    <Compile Include="Identity.fs" />
+    <Compile Include="TrafficRow.fs" />
+    <Compile Include="IpClassification.fs" />
+  </ItemGroup>
+</Project>

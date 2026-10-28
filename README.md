@@ -1,4 +1,4 @@
-# AutoCommand — see what your Windows PC is really doing
+﻿# AutoCommand — see what your Windows PC is really doing
 
 ![AutoCommand](Assets/corp_banner.png?v=light1)
 
@@ -87,14 +87,33 @@ Everything happens on your computer; the app talks to no one by default, and the
 
 ## For developers and tinkerers
 
+![Architecture](docs/infographic-architecture.svg)
+
+This is **AutoCommand III**: the same app you just read about, with its core
+engine layer rebuilt in **F#** — the C# WPF shell and app services drive
+app-agnostic F# engines (firewall with strong-typed COM, Sysmon watching,
+DNS/geo/RDAP, TLS interception, forensics, site diagnosis, the MCP agent
+bridge), injected with AutoCommand's identity. Same behavior, same
+self-tests, all of them green. The full story — what moved, what was
+ported forward from II, what the seams look like — is in
+**[README-III.md](README-III.md)**.
+
+![The migration](docs/infographic-migration.svg)
+
 ```powershell
 # .NET 10 SDK required
-git clone https://github.com/dparksports/autocommand-windows.git
-cd autocommand-windows
+git clone https://github.com/dparksports/autocommand-iii.git
+cd autocommand-iii
 dotnet build AutoCommand.csproj -c Release
 
 # self-contained build (what the releases ship)
 dotnet publish AutoCommand.csproj -c Release -r win-x64 --self-contained
+
+# the offline self-test suites (synthetic inputs, run anywhere)
+dotnet run --project ContainSelfTest      # firewall engine
+dotnet run --project SiteDoctorSelfTest   # diagnosis engines
+dotnet run --project NetWatchSelfTest     # watch engines
+dotnet run --project ProxyInstallSelfTest # MCP bridge
 ```
 
 How it actually works — the dual-family kernel connection table, the Sysmon archive, the svchost decoder, the AI-assistant consent model, every engine's offline self-test — is documented in **[TECHNICAL_NOTES.md](docs/TECHNICAL_NOTES.md)**. Apache 2.0.

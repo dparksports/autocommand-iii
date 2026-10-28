@@ -28,8 +28,8 @@
          EventLogReader/EventLogWatcher for the archive/live channel —
          same package family OneSettingsCadence.Core pins for its event
          channel reader. -->
-    <PackageReference Include="System.Management" Version="10.0.0-preview.4.25258.110" />
-    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.13" />
   </ItemGroup>
 
   <!-- The offline suite drives the idle reconciler's test seam
@@ -39,4 +39,19 @@
     <InternalsVisibleTo Include="NetWatchSelfTest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Core\Engines.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="IpClassifier = AutoCommand.Engines.Core.IpClassification" />
+
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

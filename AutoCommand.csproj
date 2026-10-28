@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>2026.10.29</Version>
+    <Version>2026.10.30</Version>
     <AssemblyName>AutoCommand</AssemblyName>
     <Product>AutoCommand</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -18,8 +18,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
-    <PackageReference Include="System.Management" Version="10.0.0-preview.4.25258.110" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Engines\Engines.Watch\Engines.Watch.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,6 +49,8 @@
          freeze. Built test-first — ContainSelfTest proved the safety path
          offline before the move. -->
     <ProjectReference Include="core\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
+    <ProjectReference Include="Engines\Engines.Firewall\Engines.Firewall.fsproj" />
+    <ProjectReference Include="Engines\Engines.Diagnosis\Engines.Diagnosis.fsproj" />
     <!-- Forensics core (phase 4 of the AutoCommand II extraction, see
          REWRITE.md): provenance, task attribution + scheduling, spawn
          watching, trace metrics, BITS watcher, Python instrumentation.
@@ -141,6 +147,11 @@
          csproj; own Main(), same glob reason as every other side project -->
     <Compile Remove="AgentHost\**" />
     <Compile Remove="OneSettingsCadence\**" />
+    <!-- DnsFeedSelfTest: newest self-test folder (added after the last ii
+         app build); same glob reason as the others -->
+    <Compile Remove="DnsFeedSelfTest\**" />
+    <!-- F# engine sources live in their own fsproj graph -->
+    <Compile Remove="Engines\**" />
     <!-- Extracted core engines (AutoCommand II phases, REWRITE.md): built
          through their own ProjectReferences — same glob reason as
          svchost-watch; without this exclusion the default glob pulls the
@@ -191,5 +202,28 @@
        in-process. The standalone SvchostAnalyzer.exe (headless/boot-autostart
        host) is a separate release asset built by release.ps1. -->
 
+
+  <ItemGroup>
+    <!-- Engine types under their autocommand-ii names (F# port renamed
+         FirewallRuleItem -> RuleInfo) -->
+    <Using Include="FirewallRuleItem = AutoCommand.Engines.Firewall.RuleInfo" />
+    <Using Include="BlockedTarget = AutoCommand.Engines.Firewall.BlockedTarget" />
+    <Using Include="GroupToggleResult = AutoCommand.Engines.Firewall.GroupToggleResult" />
+    <Using Include="FleetToggleResult = AutoCommand.Engines.Firewall.FleetToggleResult" />
+    <Using Include="FirewallLogHit = AutoCommand.Engines.Firewall.FirewallLogHit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Diagnosis" />
+    <Using Include="IpClassifier = AutoCommand.Engines.Core.IpClassification" />
+    <Using Include="SiteVerdictService = AutoCommand.Engines.Diagnosis.SiteVerdict" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Engines\Engines.Bridge\Engines.Bridge.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
 </Project>
 

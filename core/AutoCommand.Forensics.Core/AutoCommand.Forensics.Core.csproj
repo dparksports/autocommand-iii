@@ -41,8 +41,23 @@
   <ItemGroup>
     <!-- WMI + event channels: provenance reads Sysmon via both; the BITS
          watcher and spawn watcher follow live event channels. -->
-    <PackageReference Include="System.Management" Version="10.0.0-preview.4.25258.110" />
-    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Core\Engines.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="IpClassifier = AutoCommand.Engines.Core.IpClassification" />
+
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

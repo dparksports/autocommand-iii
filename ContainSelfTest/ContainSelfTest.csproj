@@ -19,7 +19,25 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
+    <ProjectReference Include="..\Engines\Engines.Watch\Engines.Watch.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\core\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
+    <ProjectReference Include="..\Engines\Engines.Firewall\Engines.Firewall.fsproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- Engine types under their autocommand-ii names (F# port renamed
+         FirewallRuleItem -> RuleInfo) -->
+    <Using Include="FirewallRuleItem = AutoCommand.Engines.Firewall.RuleInfo" />
+    <Using Include="BlockedTarget = AutoCommand.Engines.Firewall.BlockedTarget" />
+    <Using Include="GroupToggleResult = AutoCommand.Engines.Firewall.GroupToggleResult" />
+    <Using Include="FleetToggleResult = AutoCommand.Engines.Firewall.FleetToggleResult" />
+    <Using Include="FirewallLogHit = AutoCommand.Engines.Firewall.FirewallLogHit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

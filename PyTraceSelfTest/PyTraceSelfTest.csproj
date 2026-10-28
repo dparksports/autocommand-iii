@@ -14,6 +14,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Everything now from the Forensics core library (phase 4
          extraction, REWRITE.md): the PyTrace pair, MotwUnblocker, and
          PyTraceRecord — plus the stream capture/TLS engines it exercises
@@ -21,4 +25,7 @@
     <ProjectReference Include="..\core\AutoCommand.Forensics.Core\AutoCommand.Forensics.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

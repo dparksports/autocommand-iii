@@ -25,6 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- SvchostMonitorItem (the monitor row) lives in the NetWatch core -->
     <ProjectReference Include="..\AutoCommand.NetWatch.Core\AutoCommand.NetWatch.Core.csproj" />
   </ItemGroup>
@@ -33,7 +37,18 @@
     <!-- SysmonConnectWatcherService reads the live Sysmon channel
          (EventLogReader/EventLogWatcher) — same package the NetWatch core
          and OneSettingsCadence.Core pin for event-channel work. -->
-    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.0-preview.4.25258.110" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Core\Engines.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="IpClassifier = AutoCommand.Engines.Core.IpClassification" />
+
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

@@ -32,6 +32,22 @@
          TransmissionRecord (Intercept); the live dependency pass joins the
          block-hit feed and the blocks ledger (Contain). -->
     <ProjectReference Include="..\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
+    <!-- F# diagnosis engines (AutoCommand III): verdict, fingerprint and
+         probe services now live here; the C# twins were deleted -->
+    <ProjectReference Include="..\..\Engines\Engines.Diagnosis\Engines.Diagnosis.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- F# engine types under their autocommand-ii names so callers compile
+         unchanged (the F# port renamed SiteVerdictService -> SiteVerdict) -->
+    <Using Include="AutoCommand.Engines.Diagnosis" />
+    <Using Include="SiteVerdictService = AutoCommand.Engines.Diagnosis.SiteVerdict" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

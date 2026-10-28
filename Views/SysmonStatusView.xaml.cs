@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -116,13 +116,12 @@ namespace AutoCommand.Views
                 bool rebootRequired;
                 if (inconsistent)
                 {
-                    var r = await _installer.RepairAsync();
-                    (success, error, rebootRequired) = (r.Success, r.ErrorMessage, r.RebootRequired);
+                    (success, error, rebootRequired) = await _installer.RepairAsync();
                 }
                 else
                 {
-                    var r = await _installer.InstallAndConfigureAsync();
-                    (success, error, rebootRequired) = (r.Success, r.ErrorMessage, false);
+                    (success, error) = await _installer.InstallAndConfigureAsync();
+                    rebootRequired = false;
                 }
 
                 if (success)

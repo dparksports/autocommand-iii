@@ -3,6 +3,8 @@ using AutoCommand.NetWatch.Core;
 using System;
 using AutoCommand.Contain.Core;
 using AutoCommand.Sitedoctor.Core;
+using AutoCommand.Engines.Diagnosis;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -11,14 +13,14 @@ using System.Threading.Tasks;
 namespace AutoCommand.Sitedoctor.Core
 {
     /// <summary>
-    /// The live half of the dependency-block pass: feeds the pure core with
-    /// the real archive, the persisted block-hit feed, the block-inventory
-    /// cache, and live forward DNS for the rotation facts. Kept apart from
-    /// the core file so the offline self-test compiles the reasoning engine
-    /// byte-identical to what ships, without dragging the live services in.
+    /// The live half of the dependency-block pass, now a thin adapter over
+    /// the F# engine (Engines.Diagnosis / Dependency.fs): gathers the real
+    /// archive, the persisted block-hit feed, the block-inventory cache,
+    /// and live forward DNS for the rotation facts, and feeds the pure
+    /// core. Kept in C# because it binds the (still C#) watch services.
     /// Every failure degrades to a thinner report, never an exception.
     /// </summary>
-    public static partial class DependencyBlockService
+    public static class DependencyBlockService
     {
         /// <summary>
         /// Run off the UI thread. Attribution history goes 7 days deep — an
@@ -29,32 +31,26 @@ namespace AutoCommand.Sitedoctor.Core
             string host, int minutesBack, Action<string> progress, CancellationToken ct)
         {
             minutesBack = Math.Clamp(minutesBack, 5, 60 * 24 * 7);
-            var report = new Report { Host = host };
+            var report = new Report(host, new List<DateTime>(), new List<Hit>(),
+                new List<Hit>(), new List<string>(), new List<RotationFact>());
 
             try
             {
                 progress?.Invoke("Reading recorded page loads…");
-                var rows = TransmissionsArchiveService.Read(8000, null, null,
-                    DateTime.UtcNow - TimeSpan.FromDays(7));
+                var rows = RowAdapter.ToRows(TransmissionsArchiveService.Read(8000, null, null,
+                    DateTime.UtcNow - TimeSpan.FromDays(7)));
 
                 BlockHitFeedService.Instance.Start();   // idempotent; loads persisted hits
                 var hits = BlockHitFeedService.Instance.Recent(minutesBack, 2000)
-                    .Select(h => new BlockHitLite
-                    {
-                        TimeUtc = h.TimeUtc,
-                        Image = h.Image,
-                        Pid = h.Pid,
-                        DestIp = h.DestIp,
-                        MatchKind = h.MatchKind,
-                    })
+                    .Select(h => new BlockHitLite(h.TimeUtc, h.Image, h.Pid, h.DestIp, h.MatchKind))
                     .ToList();
                 BlockInfoLite Lookup(string ip)
                 {
                     var b = BlockHitFeedService.Instance.BlockedIp(ip);
-                    return b == null ? null : new BlockInfoLite { Class = b.Class, Created = b.Created };
+                    return b == null ? null : new BlockInfoLite(b.Class, b.Created);
                 }
 
-                report = Analyze(host, rows, hits, Lookup,
+                report = DependencyAnalysis.Analyze(host, rows, hits, Lookup,
                     DateTime.UtcNow.AddMinutes(-minutesBack));
 
                 if (!report.Any) return report;
@@ -75,7 +71,7 @@ namespace AutoCommand.Sitedoctor.Core
                         // GetHostAddressesAsync, not a cached resolver: the
                         // rotation being measured is live DNS behavior.
                         var addrs = await Dns.GetHostAddressesAsync(depHost, cts.Token);
-                        var fact = MeasureRotation(depHost,
+                        var fact = DependencyAnalysis.MeasureRotation(depHost,
                             addrs.Select(a => a.ToString()), Lookup);
                         if (fact != null) report.Rotations.Add(fact);
                     }

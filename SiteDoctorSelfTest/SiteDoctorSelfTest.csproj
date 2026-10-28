@@ -21,7 +21,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\AutoCommand.Sitedoctor.Core\AutoCommand.Sitedoctor.Core.csproj" />
+    <ProjectReference Include="..\Engines\Engines.Watch\Engines.Watch.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\core\AutoCommand.Sitedoctor.Core\AutoCommand.Sitedoctor.Core.csproj" />
+    <ProjectReference Include="..\Engines\Engines.Diagnosis\Engines.Diagnosis.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Diagnosis" />
+    <Using Include="AutoCommand.Engines.Core" />
+    <Using Include="SiteVerdictService = AutoCommand.Engines.Diagnosis.SiteVerdict" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="AutoCommand.Engines.Watch" />
+  </ItemGroup>
 </Project>

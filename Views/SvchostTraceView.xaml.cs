@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -19,6 +19,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using SvchostAnalyzer.Core;
+using SvchostIdentity = AutoCommand.Engines.Watch.SvchostIdentity;
 using AutoCommand.Services;
 
 namespace AutoCommand.Views

@@ -287,7 +287,7 @@ namespace AutoCommand
             try
             {
                 var result = await FirewallService.Instance
-                    .SetAllAutoCommandBlocksEnabledAsync(false);
+                    .SetAllBlocksEnabledAsync(false);
 
                 // A stale DNS cache keeps sites dead even after the block is
                 // lifted — flush it automatically so recovery is one click.

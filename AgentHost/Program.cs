@@ -1,4 +1,4 @@
-// AutoCommand AgentHost — headless AI-access session over the Agent core.
+﻿// AutoCommand AgentHost — headless AI-access session over the Agent core.
 // Same session semantics as the app's --agent-headless path, minus WPF:
 // single-instance guard, optional seconds cap, stdin-close stops, and
 // mutating tools permanently denied (no confirmation seam installed).
@@ -26,6 +26,7 @@ foreach (var p in System.Diagnostics.Process.GetProcessesByName("AutoCommand"))
         }
     }
 
+AutoCommand.Agent.Core.BridgeHost.Wire();   // F# bridge engine + tools, no UI
 var (ok, message) = AgentBridgeService.Instance.Start(allowMutating: false);
 Console.WriteLine(ok
     ? $"AutoCommand agent session active ({message}) — Ctrl+C or close stdin to stop."

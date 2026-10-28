@@ -1005,7 +1005,7 @@ namespace AutoCommand.Agent.Core
             if (string.IsNullOrEmpty(host)) return "Missing 'host' — the hostname to diagnose.";
             int minutes = Math.Clamp(a["minutes"]?.GetValue<int>() ?? 1440, 1, 60 * 24 * 30);
 
-            var rows = TransmissionsArchiveService.Read(4000, null, null, DateTime.UtcNow.AddMinutes(-minutes));
+            var rows = RowAdapter.ToRows(TransmissionsArchiveService.Read(4000, null, null, DateTime.UtcNow.AddMinutes(-minutes)));
             var siteRows = rows.Where(r => string.Equals(r.Sni, host, StringComparison.OrdinalIgnoreCase)).ToList();
             var all = SiteFingerprintService.AllFingerprints(rows);
             var fingerprint = SiteFingerprintService.Fingerprint(
@@ -1017,7 +1017,7 @@ namespace AutoCommand.Agent.Core
                 .ToList();
             if (controls.Count == 0) controls = new List<string> { "example.com" };
 
-            SiteProbeService.SiteProbeReport report;
+            SiteProbeReport report;
             try
             {
                 report = SiteProbeService.Shared.RunAsync(
@@ -1034,7 +1034,7 @@ namespace AutoCommand.Agent.Core
             // page's other hosts silently blocked during this browser's
             // recorded visits? Blocked connects carry no hostname, so only
             // this join can see them. Degrades to null, never throws.
-            DependencyBlockService.Report dep = null;
+            Report dep = null;
             try
             {
                 BlockHitFeedService.Instance.Start();
