@@ -474,7 +474,26 @@ namespace AutoCommand.Agent.Core
                 rows.Add(row);
             }
             lock (_lastSeenLock) { _lastSeen = seenNow; }
-            return new JsonObject { ["type"] = "monitor_snapshot", ["rows"] = rows, ["row_count"] = rows.Count };
+
+            // open block gates ride the snapshot: offline agents reading the
+            // feed alone see which targets are temporarily unblocked
+            var gates = new JsonArray();
+            foreach (var g in BlockGateService.Instance.Open)
+                gates.Add(new JsonObject
+                {
+                    ["target"] = g.Display,
+                    ["remaining_minutes"] = Math.Round(g.RemainingMinutes, 1),
+                    ["closes_at"] = g.ExpiresUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                    ["client"] = g.Client,
+                });
+
+            return new JsonObject
+            {
+                ["type"] = "monitor_snapshot",
+                ["rows"] = rows,
+                ["row_count"] = rows.Count,
+                ["open_gates"] = gates,
+            };
         }
 
         /// <summary>
@@ -1295,6 +1314,9 @@ namespace AutoCommand.Agent.Core
             var targets = new[] { (r.Kind, r.Key) };
             var (matched, changed) = FirewallService.Instance.SetTargetsEnabledAsync(targets, false).GetAwaiter().GetResult();
             BlocksStore.SetStatuses(targets, "off", "mcp");
+            try { AgentBridgeService.Instance.LogActivity(
+                "gate", "opened", $"{r.Display} for {minutes} min" +
+                (string.IsNullOrEmpty(reason) ? "" : $" — {reason}")); } catch { }
             return ToJson(new JsonObject
             {
                 ["gate_open"] = true,
@@ -1340,6 +1362,8 @@ namespace AutoCommand.Agent.Core
                     ["note"] = "No gate is open for that target - blocking was already restored (or never gated).",
                 });
             BlockGateService.Instance.CloseAsync(r.Kind, r.Key, "mcp").GetAwaiter().GetResult();
+            try { AgentBridgeService.Instance.LogActivity(
+                "gate", "closed (by agent)", $"{r.Display} — blocking restored"); } catch { }
             return ToJson(new JsonObject
             {
                 ["gate_open"] = false,

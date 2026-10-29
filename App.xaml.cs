@@ -189,6 +189,14 @@ namespace AutoCommand
             // Block gates: close anything that expired while the app was
             // down, then keep watch — an open gate is a promise to re-block
             _ = Agent.Core.BlockGateService.Instance.ReconcileOnStartupAsync();
+            // every gate close reaches the bridge's activity log — the
+            // agent-facing record (Be My Guest tab + offline agents), so a
+            // window ending is visible even if nobody was watching
+            Agent.Core.BlockGateService.Instance.GateClosed += (g, origin) =>
+            {
+                try { AgentBridgeService.Instance.LogActivity(
+                    "gate", $"closed ({origin})", $"{g.Display} — blocking restored"); } catch { }
+            };
             InstrumentMetronome.Instance.Register(new InstrumentSpec
             {
                 Id = "gate-watch",
