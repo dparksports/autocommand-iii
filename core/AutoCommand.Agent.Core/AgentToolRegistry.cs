@@ -310,25 +310,6 @@ namespace AutoCommand.Agent.Core
                 a => CloseGate(a),
                 a => $"Close the block gate early - return blocking ON for {a["target"]} now?"),
 
-            new Tool(
-                "kill_process",
-                "Forcefully terminate a process by PID. The confirmation dialog shows the LIVE process " +
-                "name at the moment of the ask (PID-reuse guard). Asks the user for every call.",
-                Schema(("pid", "Process ID to terminate", true),
-                       ("reason", "Why", false)),
-                true,
-                a => KillProcess(a),
-                a => DescribeLiveProcess(a["pid"]?.GetValue<int>() ?? 0) + ReasonSuffix(a)),
-
-            new Tool(
-                "disable_task",
-                "Disable a scheduled task (reversible: schtasks /Change /TN <path> /ENABLE). " +
-                "Asks the user for every call.",
-                Schema(("task_path", "Scheduled task path", true),
-                       ("reason", "Why", false)),
-                true,
-                a => DisableTask(a),
-                a => $"Disable scheduled task '{a["task_path"]}'?" + ReasonSuffix(a)),
         };
 
         public static string[] Names(bool includeMutating) =>
@@ -1362,32 +1343,6 @@ namespace AutoCommand.Agent.Core
         }
 
 
-        private static string KillProcess(JsonObject a)
-        {
-            int pid = a["pid"]?.GetValue<int>() ?? 0;
-            if (pid <= 4) return "Refusing to kill PID 0–4 (system).";
-            try
-            {
-                var proc = Process.GetProcessById(pid);
-                string name = proc.ProcessName;
-                proc.Kill();
-                return $"Terminated PID {pid} ('{name}').";
-            }
-            catch (ArgumentException) { return $"PID {pid} already exited."; }
-            catch (Exception ex) { return $"Kill failed: {ex.Message}"; }
-        }
-
-        private static string DisableTask(JsonObject a)
-        {
-            string path = a["task_path"]?.GetValue<string>();
-            try
-            {
-                TaskSchedulerService.Instance.SetTaskEnabledAsync(path, false).GetAwaiter().GetResult();
-                return $"Disabled scheduled task '{path}'. Re-enable with: schtasks /Change /TN \"{path}\" /ENABLE";
-            }
-            catch (Exception ex) { return $"Disable failed: {ex.Message}"; }
-        }
-
         // ── schema / description helpers ──────────────────────────────────
 
         private static JsonObject Schema(params (string Name, string Desc, bool Required)[] props)
@@ -1411,23 +1366,6 @@ namespace AutoCommand.Agent.Core
                 ["properties"] = properties,
                 ["required"] = required,
             };
-        }
-
-        private static string ReasonSuffix(JsonObject a)
-        {
-            string reason = a["reason"]?.GetValue<string>();
-            return string.IsNullOrEmpty(reason) ? "" : $"\n\nStated reason: {reason}";
-        }
-
-        private static string DescribeLiveProcess(int pid)
-        {
-            try
-            {
-                var proc = Process.GetProcessById(pid);
-                return $"Terminate PID {pid} — LIVE process '{proc.ProcessName}'" +
-                       $" (started {proc.StartTime:yyyy-MM-dd HH:mm:ss})?";
-            }
-            catch { return $"Terminate PID {pid}? (process not found — it may have exited; the call will be a no-op)"; }
         }
 
         // ── Phone Home / Traces (read-only, backed by TraceMetricsService) ─
