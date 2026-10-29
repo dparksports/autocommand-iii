@@ -69,6 +69,14 @@ namespace AutoCommand.Contain.Core
 
         public BlocksLedger() : this(DefaultDirectory) { }
 
+        /// <summary>When true (the app enables this at startup), event
+        /// appends and store saves route through the managed write buffer
+        /// — one journal line buffered, one debounced rewrite per change —
+        /// flushed by the app's disk-flush instrument and on exit. Tests
+        /// keep the default immediate mode so round-trips stay
+        /// synchronous.</summary>
+        public bool DeferredSaves;
+
         private readonly object _gate = new();
 
         public string StorePath => Path.Combine(DataDirectory, "blocks.txt");
@@ -536,6 +544,7 @@ namespace AutoCommand.Contain.Core
             {
                 Directory.CreateDirectory(DataDirectory);
                 var sb = new StringBuilder();
+                bool deferred = DeferredSaves;
                 foreach (var r in _records)
                     sb.Append(string.Join("|",
                         "v3", r.Kind, Sanitize(r.Key), r.CreatedUtc.ToString("O"),
@@ -544,9 +553,26 @@ namespace AutoCommand.Contain.Core
                        .AppendLine();
                 // unknown lines survive rewrites at the tail, verbatim
                 foreach (string u in Unrecognized) sb.AppendLine(u);
-                File.WriteAllText(StorePath, sb.ToString());
+                if (deferred)
+                {
+                    // managed buffer: content-guarded, last-write-wins —
+                    // identical content never touches the disk at all
+                    Engines.Core.BufferedAppender.Rewrite(StorePath, sb.ToString());
+                }
+                else
+                {
+                    File.WriteAllText(StorePath, sb.ToString());
+                }
             }
             catch { /* best-effort: the firewall rules are the source of truth */ }
+        }
+
+        /// <summary>Write any buffered event lines and the pending store
+        /// rewrite now (disk-flush instrument, app exit, explicit flush).</summary>
+        public void FlushPending()
+        {
+            Engines.Core.BufferedAppender.Flush(EventLogPath);
+            Engines.Core.BufferedAppender.Flush(StorePath);
         }
 
         private string Sanitize(string s) =>
@@ -557,6 +583,12 @@ namespace AutoCommand.Contain.Core
         {
             try
             {
+                if (DeferredSaves)
+                {
+                    Engines.Core.BufferedAppender.Append(EventLogPath,
+                        $"{DateTime.UtcNow:O}|{action}|{kind}|{key}|{Sanitize(detail)}|{origin}");
+                    return;
+                }
                 Directory.CreateDirectory(DataDirectory);
                 File.AppendAllText(EventLogPath,
                     $"{DateTime.UtcNow:O}|{action}|{kind}|{key}|{Sanitize(detail)}|{origin}{Environment.NewLine}");
@@ -588,6 +620,8 @@ namespace AutoCommand.Contain.Core
         public static void AddOrUpdate(BlockRecord record, string origin = "monitor") => _default.AddOrUpdate(record, origin);
         public static void Remove(string kind, string key, string origin = "monitor") => _default.Remove(kind, key, origin);
         public static void SetStatus(string kind, string key, string status, string origin = "blocks-tab") => _default.SetStatus(kind, key, status, origin);
+        public static bool DeferredSaves { get => _default.DeferredSaves; set => _default.DeferredSaves = value; }
+        public static void FlushPending() => _default.FlushPending();
         public static void SetStatuses(System.Collections.Generic.IEnumerable<(string Kind, string Key)> targets, string status, string origin = "blocks-tab") => _default.SetStatuses(targets, status, origin);
         public static void SetStatusForGroup(string serviceKey, string status, string origin = "blocks-tab") => _default.SetStatusForGroup(serviceKey, status, origin);
         public static void SetAttribution(string kind, string key, string serviceKey, string displayName, string source) => _default.SetAttribution(kind, key, serviceKey, displayName, source);

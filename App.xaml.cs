@@ -9,6 +9,7 @@ using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 
 using AutoCommand.Services;
+using AutoCommand.Engines.Core;
 
 namespace AutoCommand
 {
@@ -162,6 +163,29 @@ namespace AutoCommand
             // listener immediately so proof accumulates even if that tab is
             // never opened this session. Touching the proof store also wires
             // its recorder to the sinkhole. No sinkhole pins → both are no-ops.
+
+            // Managed disk writes: block store + event journals buffer
+            // and flush on one calibratable cadence (Settings shows it)
+            BlocksStore.DeferredSaves = true;
+            InstrumentMetronome.Instance.Register(new InstrumentSpec
+            {
+                Id = "disk-flush",
+                Name = "Disk flush (managed buffers)",
+                Description = "Writes every buffered journal line and pending store rewrite to disk. " +
+                              "Between flushes, writes coalesce in memory (bounded by a byte threshold " +
+                              "that self-flushes) - per-event disk writes are what this replaces.",
+                Cost = InstrumentCost.Light,
+                DefaultSeconds = 30,
+                MinSeconds = 5,
+                MaxSeconds = 600,
+                Callback = () =>
+                {
+                    BufferedAppender.FlushAll();
+                    BlocksStore.FlushPending();
+                    return Task.CompletedTask;
+                },
+            });
+
             SinkholeService.Instance.EnsureRunningForCurrentPins();
             _ = Services.TelemetryProofService.Instance.TotalDenied;
 
@@ -274,6 +298,8 @@ namespace AutoCommand
             // a live session must never outlive the app: the session file is
             // what grants access, so it dies here even on a crash-next-launch
             AgentBridgeService.Instance.Stop();
+            BufferedAppender.FlushAll();
+            BlocksStore.FlushPending();
             InstrumentMetronome.Instance.Stop();
             base.OnExit(e);
         }

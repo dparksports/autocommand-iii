@@ -15,6 +15,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AutoCommand.Services;
+using AutoCommand.Engines.Core;
 using AutoCommand.Helpers;
 
 namespace AutoCommand.Views
@@ -166,6 +167,7 @@ namespace AutoCommand.Views
                 rows.Add(panel);
             }
             InstrumentsList.ItemsSource = rows;
+            BuildDiskStats();
         }
 
         private void InstrumentEnabled_Click(object sender, RoutedEventArgs e)
@@ -199,6 +201,54 @@ namespace AutoCommand.Views
         }
 
         private void RefreshInstrumentsBtn_Click(object sender, RoutedEventArgs e) => BuildInstrumentRows();
+
+        // ── managed disk writes ─────────────────────────────────────────
+
+        /// <summary>What the managed write buffers actually did: written
+        /// totals, currently-pending bytes, and the top sinks by volume —
+        /// the self-audit for the whole disk-write story.</summary>
+        private void BuildDiskStats()
+        {
+            var stats = BufferedAppender.Stats();
+            long written = stats.Sum(st => st.Item3);
+            int pending = stats.Sum(st => st.Item2);
+            string top = string.Join("  ·  ", stats
+                .Where(st => st.Item3 > 0)
+                .OrderByDescending(st => st.Item3)
+                .Take(3)
+                .Select(st => $"{System.IO.Path.GetFileName(st.Item1)} {st.Item3 / 1024.0:0.#} KB"));
+            DiskStatsText.Text =
+                $"flushed this session: {written / 1024.0:0.#} KB" +
+                (pending > 0 ? $" · buffered now: {pending / 1024.0:0.#} KB" : "") +
+                (top.Length > 0 ? "$\n{top}" : "");
+
+            // reflect the persisted thrifty calibration
+            bool thrifty = InstrumentMetronome.Instance.CadenceOf("disk-flush") >= 300;
+            ThriftyDiskChk.IsChecked = thrifty;
+            BufferedAppender.ThresholdBytes = thrifty ? 1024 * 1024 : 256 * 1024;
+        }
+
+        private void ThriftyDisk_Changed(object sender, RoutedEventArgs e)
+        {
+            if (ThriftyDiskChk.IsChecked == true)
+            {
+                InstrumentMetronome.Instance.SetCadence("disk-flush", 300, userSet: true);
+                BufferedAppender.ThresholdBytes = 1024 * 1024;
+            }
+            else
+            {
+                InstrumentMetronome.Instance.SetCadence("disk-flush", 30, userSet: true);
+                BufferedAppender.ThresholdBytes = 256 * 1024;
+            }
+            BuildDiskStats();
+        }
+
+        private void FlushDiskBtn_Click(object sender, RoutedEventArgs e)
+        {
+            BufferedAppender.FlushAll();
+            AutoCommand.Contain.Core.BlocksStore.FlushPending();
+            BuildDiskStats();
+        }
 
         private void AutoMitigateAdaptersCheck_Checked(object sender, RoutedEventArgs e)
         {

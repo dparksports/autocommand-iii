@@ -93,6 +93,7 @@ var e4 = new ArchiveEvent { TsUtc = day2, Eid = 1, RecordId = 104, Data = new() 
 var e5 = new ArchiveEvent { TsUtc = day2.AddMinutes(5), Eid = 1, RecordId = 105, Data = new() { ["ProcessId"] = "333", ["Image"] = @"C:\temp\gamma.exe" } };
 
 foreach (var e in new[] { e1, e2, e3, e4, e5 }) SysmonArchiveService.Append(e);
+AutoCommand.Engines.Core.BufferedAppender.FlushAll();  // managed buffers: drain before file-level assertions
 
 Check("day files rotate by date",
     File.Exists(Path.Combine(tempRoot, "sysmon-archive-2026-01-01.jsonl")) &&
@@ -101,6 +102,9 @@ var (days, total) = SysmonArchiveService.StatusSummary();
 Check("status summary counts", days == 2 && total == 5, $"days={days} events={total}");
 
 // watermark dedupe: same event again, and an older one — neither appended
+// managed write buffers: assertions below read the day files directly,
+// so drain the archive's buffers once the write phase is done
+AutoCommand.Engines.Core.BufferedAppender.FlushAll();
 Check("duplicate append is dropped", !SysmonArchiveService.Append(e5));
 Check("older-than-watermark append is dropped", !SysmonArchiveService.Append(e1));
 var (_, totalAfterDupes) = SysmonArchiveService.StatusSummary();

@@ -35,6 +35,8 @@
 
 namespace AutoCommand.Engines.Watch
 
+open AutoCommand.Engines.Core
+
 open System
 open System.Collections.Generic
 open System.Diagnostics
@@ -117,6 +119,8 @@ type SysmonArchiveService private () =
     static let statePath () = Path.Combine(archiveDirectory (), "state.json")
 
     static let loadState () =
+        // managed buffers: the watermark is rewrite-buffered; read it fresh
+        try BufferedAppender.Flush(statePath ()) with _ -> ()
         try
             if File.Exists(statePath ()) then
                 match JsonSerializer.Deserialize<ArchiveState>(File.ReadAllText(statePath ())) with
@@ -133,7 +137,7 @@ type SysmonArchiveService private () =
     static let saveState (st: ArchiveState) =
         try
             Directory.CreateDirectory(archiveDirectory ()) |> ignore
-            File.WriteAllText(
+            BufferedAppender.Rewrite(
                 statePath (),
                 JsonSerializer.Serialize(
                     st,
@@ -244,9 +248,13 @@ type SysmonArchiveService private () =
                         line.["rid"] <- box e.RecordId
                         line.["data"] <- box (match e.Data with null -> Dictionary<string, string>() | d -> d)
 
-                        File.AppendAllText(
+                        // managed buffer: per-event disk writes became a
+                        // buffered journal line, flushed by the disk-flush
+                        // instrument (crash window = duplicate rows, never
+                        // loss - the watermark tolerates that by design)
+                        BufferedAppender.Append(
                             SysmonArchiveService.DayFilePath(e.TsUtc),
-                            JsonSerializer.Serialize(line) + Environment.NewLine
+                            JsonSerializer.Serialize(line)
                         )
 
                         st.LastRecordId <- e.RecordId
@@ -474,6 +482,21 @@ type SysmonArchiveService private () =
     /// keeping the newest match per requested key. Early-exits once every
     /// key is found. `contains` prefilter by eid keeps parsing cheap.
     /// </summary>
+    /// <summary>Read-side consistency for the managed buffers: journal
+    /// lines may sit in memory until the disk-flush instrument runs, so
+    /// every reader path flushes the archive's own buffers before it
+    /// enumerates the day files. Readers see everything ever appended;
+    /// writers keep their coalesced cadence.</summary>
+    static member private flushArchiveBuffers () =
+        try
+            let dir = archiveDirectory ()
+            BufferedAppender.Stats()
+            |> List.iter (fun st ->
+                let struct (path, _, _) = st
+                if path.StartsWith(dir, StringComparison.OrdinalIgnoreCase) then
+                    BufferedAppender.Flush(path))
+        with _ -> ()
+
     static member private newestBy(eid: int,
                                    wanted: HashSet<string>,
                                    keyOf: Func<ArchiveEvent, string>,
@@ -486,6 +509,7 @@ type SysmonArchiveService private () =
             try
                 if not (Directory.Exists(archiveDirectory ())) then found
                 else
+                    SysmonArchiveService.flushArchiveBuffers ()  // readers see buffered lines too
                     let files =
                         Directory.GetFiles(archiveDirectory (), "sysmon-archive-*.jsonl")
                         |> Array.sortWith (fun a b -> StringComparer.Ordinal.Compare(b, a))
@@ -556,6 +580,7 @@ type SysmonArchiveService private () =
         try
             if not (Directory.Exists(archiveDirectory ())) then hits
             else
+                SysmonArchiveService.flushArchiveBuffers ()  // readers see buffered lines too
                 let files =
                     Directory.GetFiles(archiveDirectory (), "sysmon-archive-*.jsonl")
                     |> Array.sortWith (fun a b -> StringComparer.Ordinal.Compare(b, a))

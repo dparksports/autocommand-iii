@@ -531,14 +531,14 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             line["client"] <- JsonValue.Create(if isNull clientName then "" else clientName)
             if not (String.IsNullOrEmpty detail) then line["detail"] <- JsonValue.Create(detail)
             if not (isNull outcome) then line["outcome"] <- JsonValue.Create(outcome)
-            File.AppendAllText(activityPath, line.ToJsonString() + "\n")
+            BufferedAppender.Append(activityPath, line.ToJsonString())
         with _ -> () // best-effort audit trail
 
     member private _.AppendFeed (snapshot: JsonObject) =
         try
             Directory.CreateDirectory(agentDir) |> ignore
             snapshot["t"] <- JsonValue.Create(DateTime.Now.ToString("o"))
-            File.AppendAllText(feedPath, snapshot.ToJsonString() + "\n")
+            BufferedAppender.Append(feedPath, snapshot.ToJsonString())
         with _ -> () // best-effort feed
 
     /// <summary>Phase 1: periodic full snapshot so offline agents can read

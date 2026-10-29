@@ -122,6 +122,19 @@
 
                         <ItemsControl x:Name="InstrumentsList"/>
 
+                        <TextBlock Text="Managed disk writes" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,2"/>
+                        <TextBlock x:Name="DiskStatsText" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <CheckBox x:Name="ThriftyDiskChk" FontSize="11"
+                                      Content="Minimize disk writes — flush every 5 minutes, 1 MB buffers"
+                                      Checked="ThriftyDisk_Changed" Unchecked="ThriftyDisk_Changed"
+                                      ToolTip="Batching for HDD-friendliness and idle machines: the flush instrument's cadence moves to 5 minutes and buffers grow to 1 MB (a buffer still self-flushes at its threshold). The trade-off is a larger crash window - one flush interval - which every routed writer tolerates by design."/>
+                            <Button x:Name="FlushDiskBtn" Content="Flush now" Click="FlushDiskBtn_Click"
+                                    Padding="10,3" FontSize="11" Margin="12,0,0,0"
+                                    ToolTip="Write every buffered journal line and pending store rewrite immediately."/>
+                        </StackPanel>
+
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button x:Name="ResetInstrumentsBtn" Content="↺ Restore defaults" Click="ResetInstrumentsBtn_Click"
                                     Padding="10,3" FontSize="11"

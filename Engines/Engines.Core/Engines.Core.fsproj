@@ -8,6 +8,7 @@
   <ItemGroup>
     <!-- F# requires explicit compile order — the SDK does not glob .fs files -->
     <Compile Include="Identity.fs" />
+    <Compile Include="BufferedAppender.fs" />
     <Compile Include="TrafficRow.fs" />
     <Compile Include="IpClassification.fs" />
   </ItemGroup>
