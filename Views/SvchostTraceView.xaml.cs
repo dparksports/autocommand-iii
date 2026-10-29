@@ -38,17 +38,28 @@ namespace AutoCommand.Views
     /// Pattern detection on top: destination classification (Microsoft /
     /// Akamai / Gcore / unclassified), beacon regularity (coefficient of
     /// variation of connect intervals), respawn loops, upload dominance.
-    /// Polls WMI + the kernel TCP table (GetExtendedTcpTable) at 1s —
-    /// deliberately non-elevated-friendly; kernel ETW (Sysmon) needs
-    /// admin, this degrades gracefully instead.
+    /// Polls WMI + the kernel TCP table (GetExtendedTcpTable) — deliberately
+    /// non-elevated-friendly; kernel ETW (Sysmon) needs admin, this degrades
+    /// gracefully instead. The poll runs on the Instrument Metronome (1 s
+    /// default, calibratable in Settings), with the WMI/TCP gathering off
+    /// the UI thread and only the row/dictionary updates on it.
     /// </summary>
     public partial class SvchostTraceView : UserControl
     {
         private const int MaxRows = 2000;
+        // recording buffers are capped too — see BoundHistories(); this view
+        // is a long-lived recorder and once grew without bound
 
-        private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly DispatcherTimer _analysis = new() { Interval = TimeSpan.FromSeconds(30) };
         private readonly DispatcherTimer _svcTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+
+        // metronome state: the 1 s poll runs on the Instrument Metronome,
+        // off the UI thread (WMI + TCP table in the gather, dictionaries and
+        // rows in one dispatcher hop). Snapshots are captured on the UI
+        // thread at the end of each apply for the next background gather.
+        private bool _traceInstrumentRegistered;
+        private HashSet<int> _knownPidsSnapshot = new();
+        private int _applies;
         private bool _suppressAutoStartEvents;
         // one-time init guard — Loaded fires on every tab switch, but the
         // Tick subscription and the trace auto-start must happen only once
@@ -82,7 +93,6 @@ namespace AutoCommand.Views
         {
             InitializeComponent();
             TraceGrid.ItemsSource = _rows;
-            _poll.Tick += (_, _) => PollSafe();
             _analysis.Tick += (_, _) => Analyze();
         }
 
@@ -126,7 +136,10 @@ namespace AutoCommand.Views
                 // handler. The poll keeps retrying and reports here.
                 TraceStatusText.Text = $"Baseline failed: {ex.Message} — polls continue, errors shown here";
             }
-            _poll.Start();
+            _knownPidsSnapshot = new HashSet<int>(_svcByPid.Keys);
+            EnsureTraceInstrument();
+            InstrumentMetronome.Instance.SetEnabled("svchost-trace", true);
+            InstrumentMetronome.Instance.Start();
             _analysis.Start();
             UpdateEmptyHint();
         }
@@ -134,12 +147,35 @@ namespace AutoCommand.Views
         private void Stop()
         {
             _tracing = false;
-            _poll.Stop();
+            InstrumentMetronome.Instance.SetEnabled("svchost-trace", false);
             _analysis.Stop();
             if (StartTraceBtn != null) StartTraceBtn.Content = "▶ Start Trace";
             if (TraceStatusText != null)
                 TraceStatusText.Text = $"Trace stopped. {_rows.Count} events captured — Analyze or Export.";
             UpdateEmptyHint();
+        }
+
+        /// <summary>Registers the trace poll with the Instrument Metronome —
+        /// its cadence is user-calibratable in Settings, spread against the
+        /// other instruments, and self-slowing when WMI answers slowly.</summary>
+        private void EnsureTraceInstrument()
+        {
+            if (_traceInstrumentRegistered) return;
+            _traceInstrumentRegistered = true;
+            InstrumentMetronome.Instance.Register(new InstrumentSpec
+            {
+                Id = "svchost-trace",
+                Name = "Svchost trace poll",
+                Description = "WMI svchost enumeration + kernel TCP table for the Svchost Trace tab " +
+                              "(spawns, connections, byte counts). Runs off the UI thread; auto-slows " +
+                              "if WMI answers slowly on this machine.",
+                Cost = InstrumentCost.Heavy,
+                DefaultSeconds = 1,
+                MinSeconds = 1,
+                MaxSeconds = 60,
+                DefaultEnabled = false,   // tracing turns it on (tab contract unchanged)
+                Callback = TraceTickAsync,
+            });
         }
 
         private void ClearBtn_Click(object sender, RoutedEventArgs e)
@@ -208,16 +244,47 @@ namespace AutoCommand.Views
             TraceStatusText.Text = $"Tracing… baseline: {_svcByPid.Count} svchost instances, {_connOpen.Count} preexisting connections · 1s polls";
         }
 
-        private void Poll()
+        /// <summary>One metronome tick — OFF the UI thread. All WMI and the
+        /// kernel TCP table are gathered here (spawns get their service and
+        /// parent names resolved here too), then the dictionaries, rows and
+        /// chips update in a single dispatcher hop. The UI thread never
+        /// blocks on WMI: the 1 s poll that once froze rendering system-wide
+        /// now costs it nothing. Transient WMI failures surface as the
+        /// instrument's Note via the metronome and retry next tick.</summary>
+        private async Task TraceTickAsync()
         {
+            if (!_tracing) return;
+            var known = _knownPidsSnapshot;
+
+            var procs = await Task.Run(QueryProcesses);
+            var conns = await Task.Run(() => TcpConnectionTable.GetEstablished());
+
+            var spawned = new List<((int Pid, int Ppid, string Created, string Cmd, long R, long W) P, string Svc, string Parent)>();
+            foreach (var p in procs)
+            {
+                if (known.Contains(p.Pid)) continue;
+                string svc = await Task.Run(() => QueryServices(p.Pid));
+                string parent = await Task.Run(() => QueryProcessName(p.Ppid));
+                spawned.Add((p, svc, parent));
+            }
+
+            await Dispatcher.InvokeAsync(() => ApplyTraceTick(procs, conns, spawned));
+        }
+
+        private void ApplyTraceTick(
+            List<(int Pid, int Ppid, string Created, string Cmd, long R, long W)> procs,
+            System.Collections.Generic.IReadOnlyList<TcpConnectionTable.Row> conns,
+            List<((int Pid, int Ppid, string Created, string Cmd, long R, long W) P, string Svc, string Parent)> spawned)
+        {
+            if (!_tracing) return;
             _ticks++;
+            _applies++;
             var now = DateTime.Now;
-            var procs = QueryProcesses();
 
             // spawns during the trace (baseline population is handled by Baseline())
-            foreach (var p in procs)
+            foreach (var (p, svc, parent) in spawned)
                 if (!_svcByPid.ContainsKey(p.Pid))
-                    OnSpawn(p, "spawn", now);
+                    OnSpawnFetched(p, svc ?? "<no service>", parent ?? "<exited>", "spawn", now);
 
             // exits
             var live = procs.Select(p => p.Pid).ToHashSet();
@@ -232,7 +299,7 @@ namespace AutoCommand.Views
 
             // connections (established, non-loopback, svchost-owned)
             var cur = new Dictionary<string, bool>();
-            foreach (var c in TcpConnectionTable.GetEstablished())
+            foreach (var c in conns)
             {
                 string ip = c.RemoteIp;
                 if (ip.StartsWith("127.") || ip == "::1") continue; // loopback only — this tab traces LAN too
@@ -264,32 +331,54 @@ namespace AutoCommand.Views
                 _connOpen.Remove(key);
             }
 
-            // byte counters every 5th tick for network-active PIDs
-            if (_ticks % 5 == 0 && _bytes.Count > 0)
-                foreach (var p in QueryProcesses())
-                    if (_bytes.TryGetValue(p.Pid, out var hist))
+            // byte counters every 5th apply — reusing THIS pass's WMI
+            // enumeration (the old code ran a second full QueryProcesses
+            // every 5th tick; same data, half the cost and allocations)
+            if (_applies % 5 == 0 && _bytes.Count > 0)
+            {
+                var byPid = procs.ToDictionary(p => p.Pid);
+                foreach (var kv in _bytes)
+                    if (byPid.TryGetValue(kv.Key, out var p))
                     {
-                        hist.Add((now, p.R, p.W));
+                        kv.Value.Add((now, p.R, p.W));
                         _jsonEvents.Add(Json(new Dictionary<string, object> {
                             ["type"]="bytes", ["pid"]=p.Pid, ["r"]=p.R, ["w"]=p.W }));
                     }
+            }
 
-            EventsChip.Text = $"events: {_rows.Count}";
-            TraceStatusText.Text = $"Tracing… tick {_ticks} · {_svcByPid.Count} svchost instances · {_connOpen.Count} live connections";
+            BoundHistories(live);
+
+            // snapshot for the next background gather (no dispatcher
+            // round-trip inside the gather)
+            _knownPidsSnapshot = new HashSet<int>(_svcByPid.Keys);
+
+            // status at 1/5th the cadence — a per-second TextBlock update was
+            // a per-second render (and a GDI-copy present) for this window
+            if (_applies % 5 == 0)
+            {
+                EventsChip.Text = $"events: {_rows.Count}";
+                TraceStatusText.Text = $"Tracing… tick {_ticks} · {_svcByPid.Count} svchost instances · {_connOpen.Count} live connections";
+            }
         }
 
-        /// <summary>
-        /// Poll wrapper: WMI/TCP-table failures surface in the status line
-        /// instead of raising a modal per tick through the app-level
-        /// Dispatcher handler. Transient WMI errors recover on retry.
-        /// </summary>
-        private void PollSafe()
+        /// <summary>Hard caps on every recording buffer — this view is a
+        /// long-lived recorder whose jsonl lines, connect events and per-PID
+        /// byte histories once grew without bound for the life of the
+        /// process.</summary>
+        private void BoundHistories(HashSet<int> live)
         {
-            try { Poll(); }
-            catch (Exception ex)
-            {
-                TraceStatusText.Text = $"Trace error (tick {_ticks}): {ex.Message} — retrying next tick";
-            }
+            const int maxJson = 20000, maxConn = 20000, maxSamplesPerPid = 500, maxTrackedPids = 400;
+            if (_jsonEvents.Count > maxJson) _jsonEvents.RemoveRange(0, _jsonEvents.Count - maxJson);
+            if (_connEvents.Count > maxConn) _connEvents.RemoveRange(0, _connEvents.Count - maxConn);
+            foreach (var kv in _bytes)
+                if (kv.Value.Count > maxSamplesPerPid)
+                    kv.Value.RemoveRange(0, kv.Value.Count - maxSamplesPerPid);
+            if (_bytes.Count > maxTrackedPids)
+                foreach (var pid in _bytes.Keys.Where(k => !live.Contains(k)).OrderBy(k => k).ToList())
+                {
+                    _bytes.Remove(pid);
+                    if (_bytes.Count <= maxTrackedPids) break;
+                }
         }
 
         /// <summary>The grid overlay shown while stopped with no rows, so a
@@ -301,10 +390,20 @@ namespace AutoCommand.Views
                     ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>Baseline-era path: fetches the WMI identity here. The
+        /// per-tick path resolves these off the UI thread in TraceTickAsync
+        /// and calls OnSpawnFetched directly.</summary>
         private void OnSpawn((int Pid, int Ppid, string Created, string Cmd, long R, long W) p, string type, DateTime now)
         {
             string services = QueryServices(p.Pid) ?? "<no service>";
             string parent = QueryProcessName(p.Ppid) ?? "<exited>";
+            OnSpawnFetched(p, services, parent, type, now);
+        }
+
+        private void OnSpawnFetched(
+            (int Pid, int Ppid, string Created, string Cmd, long R, long W) p,
+            string services, string parent, string type, DateTime now)
+        {
             _svcByPid[p.Pid] = services;
 
             bool badParent = parent != "services.exe";

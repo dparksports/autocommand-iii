@@ -8,6 +8,8 @@ using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 
+using AutoCommand.Services;
+
 namespace AutoCommand
 {
     public partial class App : Application
@@ -272,6 +274,7 @@ namespace AutoCommand
             // a live session must never outlive the app: the session file is
             // what grants access, so it dies here even on a crash-next-launch
             AgentBridgeService.Instance.Stop();
+            InstrumentMetronome.Instance.Stop();
             base.OnExit(e);
         }
 

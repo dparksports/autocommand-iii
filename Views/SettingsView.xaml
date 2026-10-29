@@ -112,34 +112,25 @@
                     </Grid>
                 </Border>
 
-                <!-- Security Check Rate -->
+                <!-- Instrumentation -->
                 <Border Style="{StaticResource CardPanel}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Instrumentation" Style="{StaticResource SectionHeader}"/>
 
-                        <TextBlock Text="Security Check Rate" Style="{StaticResource SectionHeader}"/>
+                        <TextBlock Text="Every periodic background instrument, with its cadence under your control. Instruments are phase-spread so equal-cadence work never piles onto the same instant; heavy ones are serialized a second apart; and a run that takes too long on this machine auto-slows its instrument (noted in amber) until you recalibrate it here. Changes apply immediately and persist across restarts."
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,10"/>
 
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
-                            <TextBlock Text="Background check interval:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ComboBox x:Name="CheckRateCombo" Width="200"
-                                      SelectionChanged="CheckRateCombo_SelectionChanged">
-                                <ComboBoxItem Content="Every 60 seconds" Tag="60"/>
-                                <ComboBoxItem Content="Every 30 seconds" Tag="30"/>
-                                <ComboBoxItem Content="Every 10 seconds" Tag="10"/>
-                                <ComboBoxItem Content="Every 6 seconds" Tag="6"/>
-                                <ComboBoxItem Content="Every 5 seconds (default)" Tag="5"/>
-                                <ComboBoxItem Content="Every 3 seconds" Tag="3"/>
-                                <ComboBoxItem Content="Every second" Tag="1"/>
-                            </ComboBox>
+                        <ItemsControl x:Name="InstrumentsList"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="ResetInstrumentsBtn" Content="↺ Restore defaults" Click="ResetInstrumentsBtn_Click"
+                                    Padding="10,3" FontSize="11"
+                                    ToolTip="Every instrument returns to its default cadence and on/off state."/>
+                            <Button x:Name="RefreshInstrumentsBtn" Content="⟳ Refresh stats" Click="RefreshInstrumentsBtn_Click"
+                                    Padding="10,3" FontSize="11" Margin="8,0,0,0"
+                                    ToolTip="Re-read each instrument's live run stats."/>
                         </StackPanel>
-
-                        <TextBlock Grid.Row="2" Text="How often the fast security checks run (SSTP service, hosted network, adapter events). Heavier scans (kernel debug, hosts file, privileged tasks, firewall drift) keep fixed 30–60 second cadences. Takes effect immediately; persisted across restarts."
-                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"/>
-                    </Grid>
+                    </StackPanel>
                 </Border>
 
                 <!-- Application Information -->

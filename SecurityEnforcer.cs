@@ -11,6 +11,7 @@ using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
 using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
+using AutoCommand.Services;
 using AutoCommand.Sitedoctor.Core;
 
 namespace AutoCommand
@@ -83,11 +84,6 @@ namespace AutoCommand
                     _isKernelDebugAllowed = System.IO.File.ReadAllText("allowed_kerneldebug.txt").Trim() == "True";
                 if (System.IO.File.Exists("auto_mitigate_adapters.txt"))
                     _autoMitigateAdapters = System.IO.File.ReadAllText("auto_mitigate_adapters.txt").Trim() == "True";
-                if (System.IO.File.Exists("check_interval.txt")
-                    && int.TryParse(System.IO.File.ReadAllText("check_interval.txt").Trim(), out int saved))
-                {
-                    CheckIntervalSeconds = saved;
-                }
             }
             catch { }
         }
@@ -113,7 +109,25 @@ namespace AutoCommand
             _adapterWatcher.AdapterAppeared += OnAdapterAppeared;
             _adapterWatcher.Start();
 
-            Task.Run(RunLoop);
+            // The fast-check loop now rides the Instrument Metronome: its
+            // cadence is user-calibratable in Settings, phase-spread against
+            // the other periodic instruments, and self-slowing if a run
+            // takes too long on this machine.
+            InstrumentMetronome.Instance.Register(new InstrumentSpec
+            {
+                Id = "security-enforcer",
+                Name = "Security enforcement (fast checks)",
+                Description = "SSTP service state, hosted network and adapter checks. Heavier scans " +
+                              "(kernel debug, hosts file, privileged tasks, firewall drift) ride along " +
+                              "at fixed 30-60s cadences inside this instrument.",
+                Cost = InstrumentCost.Heavy,
+                DefaultSeconds = LegacyIntervalSeconds(),
+                MinSeconds = 1,
+                MaxSeconds = 60,
+                Callback = EnforceOnceAsync,
+            });
+            InstrumentMetronome.Instance.SetEnabled("security-enforcer", true);
+            InstrumentMetronome.Instance.Start();
         }
 
         public void Stop()
@@ -121,20 +135,76 @@ namespace AutoCommand
             _isRunning = false;
             _adapterWatcher?.Dispose();
             _adapterWatcher = null;
+            InstrumentMetronome.Instance.SetEnabled("security-enforcer", false);
         }
 
-        // User-selected tick rate for the fast checks (persisted to check_interval.txt).
-        // Heavy scans keep fixed 30s/60s cadences regardless of this value.
-        private static int _checkIntervalSeconds = 5;
+        /// <summary>One metronome tick: the old RunLoop body without its
+        /// sleep. Heavy scans keep their own fixed elapsed-time cadences.</summary>
+        private async Task EnforceOnceAsync()
+        {
+            if (!_isRunning) return;
+            try
+            {
+                // Fast checks — every tick, at the user-selected rate
+                // (cheap: one service-controller read, one registry read, one WMI query)
+                CheckHostedNetwork();
+                EnforceSstpService();
+
+                // Heavier scans — fixed cadences regardless of tick rate
+                var now = DateTime.UtcNow;
+                if ((now - _lastKdnetCheckUtc).TotalSeconds >= HeavyScanKdnetSeconds)
+                {
+                    _lastKdnetCheckUtc = now;
+                    EnforceKernelDebug();
+                }
+                if ((now - _lastHostsCheckUtc).TotalSeconds >= HeavyScanHostsSeconds)
+                {
+                    _lastHostsCheckUtc = now;
+                    CheckHostsFile();
+                }
+                if ((now - _lastPrivTasksCheckUtc).TotalSeconds >= HeavyScanPrivTasksSeconds)
+                {
+                    _lastPrivTasksCheckUtc = now;
+                    CheckPrivilegedTasks();
+                }
+                if ((now - _lastFirewallDriftCheckUtc).TotalSeconds >= HeavyScanFirewallDriftSeconds)
+                {
+                    _lastFirewallDriftCheckUtc = now;
+                    await MonitorFirewallDrift();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Enforcer Error: {ex.Message}");
+            }
+        }
+
+        /// <summary>One-time migration of the old check_interval.txt knob —
+        /// its value becomes the user's calibrated cadence for the enforcer
+        /// instrument in cadence_settings.json.</summary>
+        private static int LegacyIntervalSeconds()
+        {
+            try
+            {
+                if (System.IO.File.Exists("check_interval.txt") &&
+                    int.TryParse(System.IO.File.ReadAllText("check_interval.txt").Trim(), out int saved))
+                {
+                    int[] allowed = { 60, 30, 10, 6, 5, 3, 1 };
+                    return allowed.Contains(saved) ? saved : 5;
+                }
+            }
+            catch { /* default below */ }
+            return 5;
+        }
+
+        // User-selected tick rate for the fast checks — now the metronome
+        // instrument's calibration (Settings ▸ Instrumentation). Kept as an
+        // API bridge for older callers; heavy scans keep fixed 30s/60s
+        // cadences regardless of this value.
         public static int CheckIntervalSeconds
         {
-            get => _checkIntervalSeconds;
-            set
-            {
-                int[] allowed = { 60, 30, 10, 6, 5, 3, 1 };
-                _checkIntervalSeconds = allowed.Contains(value) ? value : 5;
-                try { System.IO.File.WriteAllText("check_interval.txt", _checkIntervalSeconds.ToString()); } catch { }
-            }
+            get => InstrumentMetronome.Instance.CadenceOf("security-enforcer") is int s && s > 0 ? s : 5;
+            set => InstrumentMetronome.Instance.SetCadence("security-enforcer", value, userSet: true);
         }
 
         // Fixed cadences for heavier scans (seconds) — independent of the tick rate
@@ -155,48 +225,6 @@ namespace AutoCommand
         private DateTime _lastFirewallDriftAlertUtc = DateTime.MinValue;
 
         public event Action<List<string>> ConfigurationDriftDetected;
-
-        private async Task RunLoop()
-        {
-            while (_isRunning)
-            {
-                try
-                {
-                    // Fast checks — every tick, at the user-selected rate
-                    // (cheap: one service-controller read, one registry read, one WMI query)
-                    CheckHostedNetwork();
-                    EnforceSstpService();
-
-                    // Heavier scans — fixed cadences regardless of tick rate
-                    var now = DateTime.UtcNow;
-                    if ((now - _lastKdnetCheckUtc).TotalSeconds >= HeavyScanKdnetSeconds)
-                    {
-                        _lastKdnetCheckUtc = now;
-                        EnforceKernelDebug();
-                    }
-                    if ((now - _lastHostsCheckUtc).TotalSeconds >= HeavyScanHostsSeconds)
-                    {
-                        _lastHostsCheckUtc = now;
-                        CheckHostsFile();
-                    }
-                    if ((now - _lastPrivTasksCheckUtc).TotalSeconds >= HeavyScanPrivTasksSeconds)
-                    {
-                        _lastPrivTasksCheckUtc = now;
-                        CheckPrivilegedTasks();
-                    }
-                    if ((now - _lastFirewallDriftCheckUtc).TotalSeconds >= HeavyScanFirewallDriftSeconds)
-                    {
-                        _lastFirewallDriftCheckUtc = now;
-                        await MonitorFirewallDrift();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Enforcer Error: {ex.Message}");
-                }
-                await Task.Delay(TimeSpan.FromSeconds(_checkIntervalSeconds));
-            }
-        }
 
         public void ForceApplyFirewallRules()
         {
