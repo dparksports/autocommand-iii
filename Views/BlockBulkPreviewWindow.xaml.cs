@@ -19,7 +19,7 @@ namespace AutoCommand.Views
     }
 
     /// <summary>
-    /// The change-preview sheet every bulk pause/resume goes through — the
+    /// The change-preview sheet every bulk blocking change goes through — the
     /// replacement for per-group MessageBox confirms. Shows the exact scope
     /// grouped by service, warns on high-impact groups, and offers the scope
     /// most users actually want ("all except high-impact") as one click.
@@ -28,13 +28,15 @@ namespace AutoCommand.Views
     public partial class BlockBulkPreviewWindow : Window
     {
         private readonly List<BulkGroupLine> _groups;
+        private readonly string _verb;         // "Restore blocking" | "Stop blocking"
 
         /// <summary>True when the user chose "except high-impact" and such
         /// groups exist in scope.</summary>
         public bool ExcludeHighImpact { get; private set; }
 
-        public BlockBulkPreviewWindow(string verb, List<BulkGroupLine> groups)
+        public BlockBulkPreviewWindow(string verb, bool enable, List<BulkGroupLine> groups)
         {
+            _verb = verb;
             _groups = groups.OrderByDescending(g => g.HighImpact ? 1 : 0)
                              .ThenByDescending(g => g.Targets)
                              .ToList();
@@ -45,15 +47,17 @@ namespace AutoCommand.Views
             int mHi = hi.Sum(g => g.Rules);
 
             InitializeComponent();
+            RbAll.Checked += Scope_Changed;
+            RbExcept.Checked += Scope_Changed;
 
-            Title = $"{verb} blocks — preview";
-            HeadlineText.Text = $"{verb} {nAll} target(s) — {mAll} rule(s) will be {(verb == "Pause" ? "disabled" : "enabled")}";
+            Title = $"{verb} — preview";
+            HeadlineText.Text = $"{verb}: {nAll} target(s) — {mAll} rule(s) will be {(enable ? "enabled" : "disabled")}";
             SubText.Text = hi.Count > 0
                 ? "Groups this machine depends on are marked 🔴 and carry a warning — pick the scope below before applying."
                 : "Scope is grouped by the Windows service that made the blocked connection.";
-            RbAll.Content = $"{verb} all — {nAll} target(s) · {mAll} rule(s)";
+            RbAll.Content = $"{verb} — all {nAll} target(s) · {mAll} rule(s)";
             if (hi.Count > 0)
-                RbExcept.Content = $"{verb} all except 🔴 high-impact — {nAll - nHi} target(s) · {mAll - mHi} rule(s)";
+                RbExcept.Content = $"{verb} — all except 🔴 high-impact ({nAll - nHi} target(s) · {mAll - mHi} rule(s))";
             else
                 RbExcept.Visibility = Visibility.Collapsed;
 
@@ -102,10 +106,10 @@ namespace AutoCommand.Views
 
         private void UpdateApplyLabel()
         {
-            ExcludeHighImpact = RbExcept.IsVisible && RbExcept.IsChecked == true;
+            // null-safe on purpose: reachable from XAML parse-time events
+            ExcludeHighImpact = RbExcept is { IsVisible: true, IsChecked: true };
             int n = _groups.Where(g => !(ExcludeHighImpact && g.HighImpact)).Sum(g => g.Targets);
-            string verb = Title.StartsWith("Pause") ? "Pause" : "Resume";
-            ApplyBtn.Content = $"{(ExcludeHighImpact ? verb + " (except 🔴)" : verb)} {n} target(s)";
+            ApplyBtn.Content = $"{_verb}: {n} target(s)";
         }
 
         private void ApplyBtn_Click(object sender, RoutedEventArgs e)

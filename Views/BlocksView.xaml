@@ -29,33 +29,33 @@
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="⛔ Blocks" FontSize="20" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <TextBlock Text="Every firewall block this app created — grouped by the Windows service that actually made the connection, not by 'svchost.exe'."
+                <TextBlock Text="Every firewall block this app created — categories on the left, the selected category's blocks on the right, grouped by the Windows service that actually made the connection."
                            FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"/>
                 <TextBlock x:Name="StatusText" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"/>
             </StackPanel>
         </DockPanel>
 
-        <!-- State ribbon (click a chip = filter) + bulk command bar.
-             Commands always state their true scope: the count of targets
-             that will change, never the whole-list total. -->
+        <!-- State ribbon (click a chip = lens the categories) + command bar.
+             Commands always state their true scope, and the object of every
+             verb is BLOCKING — never the process. -->
         <DockPanel Grid.Row="1" Margin="0,0,0,10">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                <CheckBox x:Name="SelectAllPausedChk" Content="Select all paused" FontSize="11" IsThreeState="True"
+                <CheckBox x:Name="SelectAllPausedChk" Content="Select all OFF" FontSize="11" IsThreeState="True"
                           VerticalAlignment="Center" Margin="0,2,10,0"
                           Checked="SelectAllPaused_Changed" Unchecked="SelectAllPaused_Changed"
-                          ToolTip="Check every paused block in the list below (the '⏸ Paused' chip shows only those). Clear to drop the selection."
+                          ToolTip="Check every block whose blocking is OFF (the '⏸ blocking OFF' chip lenses the list to exactly those). Clear to drop the selection."
                           Visibility="Collapsed"/>
                 <Button x:Name="ResumeSelectedBtn" Click="ResumeSelectedBtn_Click" Margin="0,0,8,0"
                         Padding="10,3" FontSize="11" Visibility="Collapsed"
-                        ToolTip="Opens the preview sheet for the checked paused blocks only."
+                        ToolTip="Opens the preview sheet for the checked blocks only."
                        />
                 <Button x:Name="ResumePausedBtn" Click="ResumePausedBtn_Click" Margin="0,0,8,0"
                         Padding="10,3" FontSize="11"
-                        ToolTip="Opens the preview sheet: every paused block, grouped by service, with a high-impact warning and an 'except high-impact' option."
+                        ToolTip="Opens the preview sheet: every block whose rules are disabled, grouped by service, with a high-impact warning and an 'except high-impact' option. Re-enables the rules — nothing is deleted."
                        />
                 <Button x:Name="PauseActiveBtn" Click="PauseActiveBtn_Click"
                         Padding="10,3" FontSize="11"
-                        ToolTip="Opens the preview sheet for every active block — e.g. before troubleshooting, pause everything at once."
+                        ToolTip="Opens the preview sheet for every block whose rules are enabled — e.g. before troubleshooting, stop all blocking at once. Rules are disabled, not deleted."
                        />
             </StackPanel>
             <ListBox x:Name="FilterList" SelectionChanged="FilterList_SelectionChanged"
@@ -108,7 +108,7 @@
                     <ComboBox x:Name="SymptomCombo" MinWidth="300" FontSize="11"
                               SelectionChanged="SymptomCombo_SelectionChanged"/>
                     <Button x:Name="PauseMatchedBtn" Click="PauseMatchedBtn_Click" Margin="8,0,0,0"
-                            Padding="10,3" FontSize="11" Content="⏸ Pause these blocks — traffic resumes"
+                            Padding="10,3" FontSize="11" Content="⏸ Stop blocking for these — traffic resumes"
                             ToolTip="Disables exactly the matched rules. Fully reversible — nothing is deleted."/>
                 </StackPanel>
                 <ListBox x:Name="MatchList" MaxHeight="150" Margin="0,6,0,0" FontFamily="Consolas" FontSize="10"
@@ -118,122 +118,187 @@
             </StackPanel>
         </Border>
 
-        <!-- Grouped block list -->
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="GroupsList">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Margin="0,0,0,6" Padding="0,0,0,6">
-                            <Expander IsExpanded="{Binding Expanded, Mode=TwoWay}">
-                                <Expander.Header>
-                                    <Grid Margin="0,4">
+        <!-- Master–detail: every category at once on the left, the selected
+             category's blocks on the right. Selection replaces the old
+             expand/collapse accordions. -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="220"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Master: the category list -->
+            <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="4" Margin="0,0,0,0">
+                <DockPanel>
+                    <TextBox x:Name="SearchBox" DockPanel.Dock="Top" Margin="8,8,8,6" FontSize="12"
+                             TextChanged="SearchBox_TextChanged"
+                             ToolTip="Find a category or a target (IP / exe). Matching targets select their category."/>
+                    <ListBox x:Name="MasterList" SelectionChanged="MasterList_SelectionChanged"
+                             BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="False">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="4,3"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Row" Background="Transparent" CornerRadius="3"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+                                                    <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentBlueBrush}"/>
+                                                    <Setter TargetName="Row" Property="BorderThickness" Value="1"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding Checked}" IsThreeState="True"
+                                                  Click="MasterCheck_Click" Tag="{Binding Group}"
+                                                  Visibility="{Binding HasCheck, Converter={StaticResource BoolToVis}}"
+                                                  VerticalAlignment="Center" Margin="0,0,6,0"
+                                                  ToolTip="Add this category's OFF blocks to the restore basket"/>
+                                        <TextBlock Text="{Binding Badge}" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"
+                                                   Visibility="{Binding HasBadge, Converter={StaticResource BoolToVis}}"
+                                                   ToolTip="{Binding BadgeTip}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12"
+                                               FontWeight="SemiBold" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Title}"/>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Border Width="40" Height="7" CornerRadius="2" ClipToBounds="True"
+                                                Background="{DynamicResource SurfaceAltBrush}" Margin="0,0,6,0"
+                                                VerticalAlignment="Center" ToolTip="Green = blocking ON · amber = blocking OFF">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="{Binding OnStar}"/>
+                                                    <ColumnDefinition Width="{Binding OffStar}"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource AccentGreenBrush}"/>
+                                                <Border Grid.Column="1" Background="{DynamicResource AccentAmberBrush}"/>
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="{Binding StateText}" FontSize="10"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch" Background="Transparent"
+                          ShowsPreview="False" ResizeBehavior="PreviousAndNext"/>
+
+            <!-- Detail: the selected category -->
+            <DockPanel Grid.Column="2" Margin="10,0,0,0">
+                <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="0,0,0,8"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="DetailBadge" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"
+                                       Visibility="Collapsed" ToolTip="High impact — blocking this breaks Windows security features, sign-in or updates"/>
+                            <TextBlock x:Name="DetailTitleText" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock x:Name="DetailSummaryText" FontSize="11" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock x:Name="DetailDescText" FontSize="11" TextWrapping="Wrap" MaxWidth="880" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="DetailRestoreBtn" Click="DetailRestoreBtn_Click" Padding="10,3" FontSize="11"
+                                    Margin="0,0,8,0" Visibility="Collapsed"
+                                    ToolTip="Re-enables this category's disabled rules (preview first). Fully reversible — nothing is deleted."/>
+                            <Button x:Name="DetailStopBtn" Click="DetailStopBtn_Click" Padding="10,3" FontSize="11"
+                                    Visibility="Collapsed"
+                                    ToolTip="Disables this category's enabled rules — traffic resumes (preview first). Fully reversible."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="DetailRows">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4">
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="22"/>
+                                            <ColumnDefinition Width="20"/>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="100"/>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="130"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding ImpactGlyph}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                       ToolTip="{Binding ImpactToolTip}"/>
-                                            <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                                            <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="3" Padding="5,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding ServiceKey}" FontSize="10" FontFamily="Consolas"
-                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                            </Border>
-                                            <TextBlock Text="{Binding Summary}" FontSize="11"
-                                                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                        </StackPanel>
-                                        <!-- Group state at a glance: proportional active/paused bar +
-             commands labeled with the count they will actually change. -->
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Border Width="90" Height="8" CornerRadius="3" ClipToBounds="True"
-                                                    Background="{DynamicResource SurfaceAltBrush}" Margin="0,0,8,0"
-                                                    VerticalAlignment="Center" ToolTip="{Binding StateToolTip}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="{Binding ActiveStar}"/>
-                                                        <ColumnDefinition Width="{Binding PausedStar}"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border Background="{DynamicResource AccentGreenBrush}"/>
-                                                    <Border Grid.Column="1" Background="{DynamicResource AccentAmberBrush}"/>
-                                                </Grid>
-                                            </Border>
-                                            <TextBlock Text="{Binding StateText}" FontSize="10"
-                                                       Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <Button Content="{Binding ResumeLabel}" Click="GroupResume_Click" Tag="{Binding}"
-                                                    Padding="8,2" FontSize="10" VerticalAlignment="Center"
-                                                    Visibility="{Binding HasPaused, Converter={StaticResource BoolToVis}}"
-                                                    ToolTip="Re-enables every paused rule in this group (preview first). Fully reversible — nothing is deleted."/>
-                                            <Button Content="{Binding PauseLabel}" Click="GroupPause_Click" Tag="{Binding}"
-                                                    Padding="8,2" FontSize="10" Margin="6,0,0,0" VerticalAlignment="Center"
-                                                    Visibility="{Binding HasActive, Converter={StaticResource BoolToVis}}"
-                                                    ToolTip="Disables every active rule in this group — traffic resumes (preview first). Fully reversible."/>
+                                        <!-- Basket checkbox appears ONLY where it can act
+                                             (blocking OFF) — no dead grey checkers. -->
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                                  Visibility="{Binding CanSelect, Converter={StaticResource BoolToVis}}"
+                                                  Click="RowSelect_Click" Tag="{Binding}" VerticalAlignment="Center"
+                                                  ToolTip="Add to the restore basket (blocking is OFF for this target)"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding StatusGlyph}" FontSize="12" VerticalAlignment="Center"
+                                                   ToolTip="{Binding StatusToolTip}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Target}" FontSize="11" FontFamily="Consolas"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding TargetToolTip}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding ServiceDisplay}" FontSize="10"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding ServiceToolTip}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="4" Text="{Binding ClassDisplay}" FontSize="10"
+                                                   Foreground="{Binding ClassBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding ClassToolTip}"/>
+                                        <TextBlock Grid.Column="5" Text="{Binding CreatedDisplay}" FontSize="10"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding CreatedToolTip}"/>
+                                        <TextBlock Grid.Column="6" Text="{Binding LastTraffic}" FontSize="10"
+                                                   Foreground="{Binding LastTrafficBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding LastTrafficToolTip}"/>
+                                        <TextBlock Grid.Column="7" Text="{Binding Containment}" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{Binding ContainmentBrush}" VerticalAlignment="Center"
+                                                   ToolTip="{Binding ContainmentToolTip}"/>
+                                        <StackPanel Grid.Column="8" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <Button Content="{Binding RowActionLabel}" Click="RowToggle_Click" Tag="{Binding}"
+                                                    Padding="8,2" FontSize="10" Margin="0,0,6,0"
+                                                   />
+                                            <Button Content="Remove" Click="RowRemove_Click" Tag="{Binding}"
+                                                    Padding="8,2" FontSize="10" Foreground="{DynamicResource AccentRedBrush}"
+                                                   />
                                         </StackPanel>
                                     </Grid>
-                                </Expander.Header>
-                                <StackPanel Margin="24,4,0,8">
-                                    <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap"
-                                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6" MaxWidth="880"/>
-                                    <ItemsControl ItemsSource="{Binding Rows}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,4">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="22"/>
-                                                            <ColumnDefinition Width="20"/>
-                                                            <ColumnDefinition Width="190"/>
-                                                            <ColumnDefinition Width="200"/>
-                                                            <ColumnDefinition Width="150"/>
-                                                            <ColumnDefinition Width="110"/>
-                                                            <ColumnDefinition Width="170"/>
-                                                            <ColumnDefinition Width="130"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanSelect}"
-                                                                  Click="RowSelect_Click" Tag="{Binding}" VerticalAlignment="Center"
-                                                                  ToolTip="{Binding SelectionToolTip}"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding StatusGlyph}" FontSize="12" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding StatusToolTip}"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding Target}" FontSize="11" FontFamily="Consolas"
-                                                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding TargetToolTip}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Column="3" Text="{Binding ServiceDisplay}" FontSize="10"
-                                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding ServiceToolTip}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Column="4" Text="{Binding ClassDisplay}" FontSize="10"
-                                                                   Foreground="{Binding ClassBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding ClassToolTip}"/>
-                                                        <TextBlock Grid.Column="5" Text="{Binding CreatedDisplay}" FontSize="10"
-                                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding CreatedToolTip}"/>
-                                                        <TextBlock Grid.Column="6" Text="{Binding LastTraffic}" FontSize="10"
-                                                                   Foreground="{Binding LastTrafficBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding LastTrafficToolTip}"/>
-                                                        <TextBlock Grid.Column="7" Text="{Binding Containment}" FontSize="10" FontWeight="SemiBold"
-                                                                   Foreground="{Binding ContainmentBrush}" VerticalAlignment="Center"
-                                                                   ToolTip="{Binding ContainmentToolTip}"/>
-                                                        <StackPanel Grid.Column="8" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                            <Button Content="{Binding RowActionLabel}" Click="RowToggle_Click" Tag="{Binding}"
-                                                                    Padding="8,2" FontSize="10" Margin="0,0,6,0"
-                                                                   />
-                                                            <Button Content="Remove" Click="RowRemove_Click" Tag="{Binding}"
-                                                                    Padding="8,2" FontSize="10" Foreground="{DynamicResource AccentRedBrush}"
-                                                                   />
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Expander>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Grid>
 
         <!-- Post-action toast: the apply WAS the confirmation's preview; this
              says what happened and offers the takeback. Auto-hides. -->

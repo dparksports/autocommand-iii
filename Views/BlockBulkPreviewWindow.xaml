@@ -21,10 +21,11 @@
                    Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
 
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
-            <RadioButton x:Name="RbAll" GroupName="scope" IsChecked="True" FontSize="12" Margin="0,0,0,4"
-                         Checked="Scope_Changed"/>
-            <RadioButton x:Name="RbExcept" GroupName="scope" FontSize="12" Margin="0,0,0,6"
-                         Checked="Scope_Changed"/>
+            <!-- Checked handlers are wired in code after InitializeComponent:
+                 parsing IsChecked="True" would fire Checked while later
+                 elements (RbExcept) are still null. -->
+            <RadioButton x:Name="RbAll" GroupName="scope" IsChecked="True" FontSize="12" Margin="0,0,0,4"/>
+            <RadioButton x:Name="RbExcept" GroupName="scope" FontSize="12" Margin="0,0,0,6"/>
         </StackPanel>
 
         <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
