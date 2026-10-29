@@ -803,16 +803,21 @@ namespace AutoCommand.Agent.Core
             var arr = new JsonArray();
             foreach (var x in aggs.Take(max))
             {
+                // shared fields carry block-hits.jsonl's exact names
+                // (Image, Pid, DestIp, DestPort, MatchKind); aggregate-only
+                // extras (Process label, Attempts, FirstUtc, LastUtc) are
+                // additive
                 arr.Add(new JsonObject
                 {
-                    ["ts_last_utc"] = x.LastUtc.ToString("yyyy-MM-dd HH:mm:ss"),
-                    ["process"] = x.Process,
-                    ["pid"] = x.Pid,
-                    ["image"] = x.Image,
-                    ["destination"] = $"{x.DestIp}:{x.DestPort}",
-                    ["blocked_kind"] = x.MatchKind,   // ip = destination IP block, app = process block
-                    ["attempts"] = x.Count,
-                    ["first_utc"] = x.FirstUtc.ToString("yyyy-MM-dd HH:mm:ss"),
+                    ["LastUtc"] = x.LastUtc.ToString("yyyy-MM-dd HH:mm:ss"),
+                    ["Image"] = x.Image,
+                    ["Pid"] = x.Pid,
+                    ["DestIp"] = x.DestIp,
+                    ["DestPort"] = x.DestPort,
+                    ["MatchKind"] = x.MatchKind,   // ip = destination IP block, app = process block
+                    ["Process"] = x.Process,
+                    ["Attempts"] = x.Count,
+                    ["FirstUtc"] = x.FirstUtc.ToString("yyyy-MM-dd HH:mm:ss"),
                 });
             }
             return ToJson(new JsonObject
@@ -1653,6 +1658,6 @@ namespace AutoCommand.Agent.Core
             };
         }
 
-        private static string ToJson(JsonObject o) => o.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        private static string ToJson(JsonObject o) => o.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
     }
 }

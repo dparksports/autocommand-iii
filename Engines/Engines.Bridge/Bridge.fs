@@ -31,7 +31,10 @@ open AutoCommand.Engines.Core
 /// Trust model — the app is the broker:
 ///   • The user starts a session from Settings → "AI access" (or the app
 ///     is launched with --agent-headless). Starting writes
-///     &lt;identity.DataRoot&gt;\agent\session.json {port, token, pid}.
+///     &lt;identity.DataRoot&gt;\agent\session.json {port, token, pid, mutatingAllowed}.
+///     The port is portBase + the first free offset when several
+///     instances run - clients must read the file, never hardcode a
+///     port; a sibling instance's bridge will reject this token.
 ///   • An MCP client spawns the proxy exe with --agent-stdio (headless,
 ///     inherits the caller's non-elevated token — no UAC), which reads the
 ///     session file and forwards JSON-RPC to the listener below.
@@ -160,9 +163,8 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                 session["pid"] <- JsonValue.Create(Process.GetCurrentProcess().Id)
                 session["startedUtc"] <- JsonValue.Create(DateTime.UtcNow.ToString("o"))
                 session["mutatingAllowed"] <- JsonValue.Create(allowMutating)
-                let toolsJson = JsonArray()
-                for n in tools.Names(allowMutating) do toolsJson.Add(JsonValue.Create(n))
-                session["tools"] <- toolsJson
+                // no tool list here: it went stale the moment a build added a
+                // tool mid-session - tools/list over the wire is authoritative
                 File.WriteAllText(sessionPath, session.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
                 let snap = JsonObject()
@@ -259,21 +261,21 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                                 host.StartsWith("localhost:", StringComparison.OrdinalIgnoreCase)
                             | _ -> false
                         if not hostOk then
-                            do! AgentBridgeService.WriteJsonResponse(stream, 403, "{\"error\":\"loopback only\"}")
+                            do! AgentBridgeService.WriteJsonResponse(stream, 403, AgentBridgeService.RpcError(null, -32001, "Forbidden: the bridge is loopback only"))
                         else
                             let authOk =
                                 match headers.TryGetValue("Authorization") with
                                 | true, auth -> this.TokenMatches(auth)
                                 | _ -> false
                             if not authOk then
-                                do! AgentBridgeService.WriteJsonResponse(stream, 401, "{\"error\":\"bad or missing session token\"}")
+                                do! AgentBridgeService.WriteJsonResponse(stream, 401, AgentBridgeService.RpcError(null, -32001, "Unauthorized: bad or missing session token. Tokens change on every session restart - re-read session.json in the AutoCommand agent folder"))
                             else
                                 let contentLength =
                                     match headers.TryGetValue("Content-Length") with
                                     | true, cl -> (match Int32.TryParse(cl) with true, n -> n | _ -> 0)
                                     | _ -> 0
                                 if contentLength < 0 || contentLength > AgentBridgeService.MaxBodyBytes then
-                                    do! AgentBridgeService.WriteJsonResponse(stream, 413, "{\"error\":\"body too large\"}")
+                                    do! AgentBridgeService.WriteJsonResponse(stream, 413, AgentBridgeService.RpcError(null, -32002, "Payload too large"))
                                 else
                                     match headers.TryGetValue("Expect") with
                                     | true, expect when expect.Contains("100-continue") ->
@@ -435,6 +437,15 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                         contentArr.Add(contentObj)
                         result["content"] <- contentArr
                         result["isError"] <- JsonValue.Create(isError)
+                        // structuredContent (MCP 2025-06-18): when the text
+                        // payload is itself JSON, hand it to capable clients
+                        // as a parsed object - no double-decode
+                        if not isError then
+                            try
+                                match JsonNode.Parse(content) with
+                                | :? JsonObject as structured -> result["structuredContent"] <- structured
+                                | _ -> ()
+                            with _ -> ()
                         return AgentBridgeService.RpcResult(rpc["id"], result)
 
                     | _ ->
@@ -456,9 +467,15 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
 
     member private _.CallToolAsync (name: string, args: JsonObject) : Task<string * bool> =
         task {
-            let tool = tools.Find(name, mutatingAllowed)
+            // find WITHOUT the mutating filter so a policy-disabled tool is
+            // distinguishable from a typo (bug report: both used to read the
+            // same "unknown tool" message)
+            let tool = tools.Find(name, true)
             if isNull (box tool) then
-                return ($"Unknown tool '{name}' (or mutating tools are disabled for this session).", true)
+                return ($"Unknown tool '{name}'. Call tools/list for this session's tool set.", true)
+            elif tool.Mutating && not mutatingAllowed then
+                return ($"Tool '{name}' exists, but this session has mutating tools OFF. " +
+                        "Enable 'Allow mutating tools' in AutoCommand's AI access settings and restart the session.", true)
             elif tool.Mutating && not (this.SessionGranted(name)) then
                 let allowed, note = this.RequestConfirmation(name, tool.ConfirmDetail(args.ToJsonString()))
                 if not allowed then
