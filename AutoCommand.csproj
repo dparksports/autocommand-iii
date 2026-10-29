@@ -34,6 +34,13 @@
          the same library - they run the shipped assembly, not a source
          copy. -->
     <ProjectReference Include="core\AutoCommand.NetWatch.Core\AutoCommand.NetWatch.Core.csproj" />
+    <!-- The Matrix-rain face of the process monitor (the Rain tab): the
+         same presentation engine the standalone overlay ships (dparksports/
+         autocommand-matrix), parked beside the vendored engines — not under
+         core\, which stays headless by house rule. Attach-mode only: it
+         renders the monitor's LIVE shared row table, never its own
+         watcher/sniffer, so the grid and the rain are one source of truth. -->
+    <ProjectReference Include="MatrixRain\AutoCommand.MatrixRain.Core\AutoCommand.MatrixRain.Core.csproj" />
     <!-- Intercept core (phase 2 of the AutoCommand II extraction, see
          REWRITE.md): sniffer, stream capture, TLS decrypt/keylog/SNI,
          loopback proxy + CA + system hooks, Sysmon connect watcher, and
@@ -156,6 +163,10 @@
          core sources into the app assembly too, and the WPF _wpftmp pass
          then trips over the duplicates (CS0579). -->
     <Compile Remove="core\**" />
+    <!-- Matrix-rain presentation engine (the Rain tab): built through its
+         own ProjectReference — same glob reason as core\ (unsafe renderer
+         + duplicate types in the WPF _wpftmp pass otherwise) -->
+    <Compile Remove="MatrixRain\**" />
   </ItemGroup>
 
   <!-- Filter out Linux .so native binaries when publishing for Windows win-x64 -->

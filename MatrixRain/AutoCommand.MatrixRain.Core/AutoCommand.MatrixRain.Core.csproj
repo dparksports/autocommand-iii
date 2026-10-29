@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Matrix-rain presentation engine — the visual face of the process
+       monitor, as shipped standalone (github.com/dparksports/autocommand-
+       matrix) and now embedded here as the Rain tab. It lives BESIDE the
+       vendored engines rather than under core\ on purpose: core libraries
+       are headless by house rule, and this one is WPF to the bone
+       (WriteableBitmap composition, glyph rasterization). The data side is
+       deliberately attachment-only — MatrixRainFeed reads the Process
+       Monitor's live shared row table, so the app's single Sysmon watcher
+       and sniffer remain the only source of truth. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>AutoCommand.MatrixRain.Core</AssemblyName>
+    <RootNamespace>AutoCommand.Matrix</RootNamespace>
+    <Company>AutoCommand</Company>
+    <Product>AutoCommand.MatrixRain.Core</Product>
+    <Description>The Matrix-rain process-monitor face: per-PID rain columns rendered over a frozen katakana backdrop, lead-glyph bloom and log-stepped wake, attach-mode aggregation over the live monitor table.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SvchostMonitorItem (the monitor row) is the F# Engines.Watch
+         RowModel in III — the same row type the Process Monitor grid
+         binds to. -->
+    <ProjectReference Include="..\..\Engines\Engines.Watch\Engines.Watch.fsproj" />
+  </ItemGroup>
+
+</Project>

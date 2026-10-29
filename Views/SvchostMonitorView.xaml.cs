@@ -73,6 +73,12 @@ namespace AutoCommand.Views
         /// connections from it for its "last traffic" column.</summary>
         public static SvchostMonitorView Current { get; private set; }
 
+        /// <summary>The shared row table both engines write into — the Rain
+        /// tab's MatrixRainFeed aggregates it (read-only by contract) so the
+        /// rain is literally the same data the DataGrid shows, with no
+        /// second watcher or sniffer.</summary>
+        public ConcurrentDictionary<string, SvchostMonitorItem> TrackedTable => _trackedIps;
+
         /// <summary>Newest live row still talking to this IP, or null — the
         /// Blocks tab's freshest "last traffic" source (beats the archive).</summary>
         public SvchostMonitorItem LiveRowForIp(string ip)

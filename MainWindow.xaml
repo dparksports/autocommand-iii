@@ -37,6 +37,15 @@
                 </TabItem.Header>
                 <views:SvchostMonitorView x:Name="SvchostTab"/>
             </TabItem>
+            <TabItem x:Name="MatrixRainNavItem">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🌧" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Rain" VerticalAlignment="Center" ToolTip="The process monitor as Matrix rain — same live data, for those who'd rather watch it."/>
+                    </StackPanel>
+                </TabItem.Header>
+                <views:MatrixRainView x:Name="MatrixRainTab"/>
+            </TabItem>
 
             <!-- ═══ CONTAIN ═══ -->
             <TabItem IsEnabled="False" Focusable="False">
