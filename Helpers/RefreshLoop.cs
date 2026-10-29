@@ -92,10 +92,10 @@ namespace AutoCommand.Helpers
         /// timers work; call once, from the constructor.
         ///
         /// Only valid when the tick reads a service-side snapshot — pausing
-        /// it must never pause data accumulation. The counter-example this
-        /// must NOT be applied to is SvchostTraceView's 1 s poll, which
-        /// detects spawns by diffing the live process set between ticks: a
-        /// paused tick loses the spawn events that happened while hidden.
+        /// it must never pause data accumulation. The counter-example: a poll that
+        /// detects spawns by DIFFING the live process set between ticks must
+        /// not be gated - a paused tick loses the spawn events that happened
+        /// while hidden.
         /// </summary>
         public static void GateVisibility(FrameworkElement host, Func<DispatcherTimer> timer)
         {

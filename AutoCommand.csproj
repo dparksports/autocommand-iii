@@ -94,21 +94,11 @@
 
   <ItemGroup>
     <Resource Include="app_icon.ico" />
-    <!-- The python audit-hook payload: embedded, read via
-         Assembly.GetManifestResourceStream by PyTraceInstallerService — never
-         written to disk as a standalone app file. -->
-    <EmbeddedResource Include="Assets\PyTraceHook.py" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\telemetry_rules.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <!-- Plain-English explanations for known scheduled tasks (Taskhostw
          Spawns tab). User-extensible: add path-keyed entries and restart. -->
-    <Content Include="Assets\known-tasks.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>

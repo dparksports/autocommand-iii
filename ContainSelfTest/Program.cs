@@ -1,11 +1,9 @@
 // Contain self-test — the blocking/safety path, offline:
 //   1. BlocksStore — round-trip persistence against a temp dir: add/upsert/
 //      pause/remove, event log, provenance parsing, grouping keys.
-//   2. TelemetryRulesService — synthetic catalog beats the built-in seed;
-//      file detection + JSON state probe driven entirely by temp files.
-//   3. FirewallService — the v2 rule-name builders (the strings the whole
+//   2. FirewallService — the v2 rule-name builders (the strings the whole
 //      block/undo/coverage machinery joins on).
-//   4. BlockContainmentVerifier — the verify_block_containment join: every
+//   3. BlockContainmentVerifier — the verify_block_containment join: every
 //      verdict (contained / stale-flow / leak) plus the identity guards
 //      (pid reuse, archive image match, loopback) from synthetic rows.
 // Nothing touches the real %LOCALAPPDATA% store, the hosts file, netsh, or
@@ -118,75 +116,7 @@ finally
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 2. TelemetryRulesService — catalog load + offline evaluation
-// ─────────────────────────────────────────────────────────────────────
-string assetsDir = Path.Combine(AppContext.BaseDirectory, "Assets");
-string rulesPath = Path.Combine(assetsDir, "telemetry_rules.json");
-try
-{
-    Directory.CreateDirectory(assetsDir);
-    string detOn  = Path.Combine(Path.GetTempPath(), "contain-selftest-on.json");
-    string detOff = Path.Combine(Path.GetTempPath(), "contain-selftest-off.json");
-    string detGone = Path.Combine(Path.GetTempPath(), "contain-selftest-gone-" + Guid.NewGuid().ToString("N") + ".json");
-    File.WriteAllText(detOn,  JsonSerializer.Serialize(new { sync = true }));
-    File.WriteAllText(detOff, JsonSerializer.Serialize(new { sync = false }));
-
-    File.WriteAllText(rulesPath, JsonSerializer.Serialize(new
-    {
-        rules = new object[]
-        {
-            new
-            {
-                id = "selftest-on", appName = "SelfTest ON", category = "test", mechanism = "x",
-                scope = "User", riskNote = "none",
-                detection = new { type = "file", path = detOn },
-                stateProbe = new { type = "json", path = detOn, key = "sync", offValues = new[] { "false" } },
-            },
-            new
-            {
-                id = "selftest-off", appName = "SelfTest OFF", category = "test", mechanism = "x",
-                scope = "User", riskNote = "none",
-                detection = new { type = "file", path = detOff },
-                stateProbe = new { type = "json", path = detOff, key = "sync", offValues = new[] { "false" } },
-            },
-            new
-            {
-                id = "selftest-undetected", appName = "SelfTest ABSENT", category = "test", mechanism = "x",
-                scope = "User", riskNote = "none",
-                detection = new { type = "file", path = detGone },
-                stateProbe = new { type = "json", path = detGone, key = "sync", offValues = new[] { "false" } },
-            },
-        }
-    }));
-
-    var svc = new TelemetryRulesService();
-    Check("catalog file beats the built-in seed", svc.Rules.Count == 3,
-          $"count={svc.Rules.Count}");
-
-    var statuses = await svc.EvaluateAllAsync();
-    var on  = statuses.First(s => s.Rule.Id == "selftest-on");
-    var off = statuses.First(s => s.Rule.Id == "selftest-off");
-    var gone = statuses.First(s => s.Rule.Id == "selftest-undetected");
-    Check("detected + still on → State=On", on.Detected && on.State == TelemetryState.On,
-          $"detected={on.Detected} state={on.State} evidence='{on.Evidence}'");
-    Check("detected + off-value → State=Off", off.Detected && off.State == TelemetryState.Off,
-          $"detected={off.Detected} state={off.State} evidence='{off.Evidence}'");
-    Check("not installed → Detected=false", !gone.Detected, gone.Evidence);
-
-    // seed fallback: with no catalog file the built-in seed rules load
-    File.Delete(rulesPath);
-    var seedSvc = new TelemetryRulesService();
-    Check("missing catalog falls back to the built-in seed",
-          seedSvc.Rules.Count >= 2 && seedSvc.Rules.All(r => r.Id.StartsWith("ultralytics")),
-          $"count={seedSvc.Rules.Count}");
-}
-finally
-{
-    try { File.Delete(rulesPath); Directory.Delete(assetsDir, true); } catch { }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// 3. FirewallService — the v2 rule-name builders every surface joins on
+// 2. FirewallService — the v2 rule-name builders every surface joins on
 // ─────────────────────────────────────────────────────────────────────
 Check("ip rule prefix is the v2 shape", FirewallService.NewIpPrefix == "AC-BLOCK-IP ");
 Check("app rule prefix is the v2 shape", FirewallService.NewAppPrefix == "AC-BLOCK-APP ");
@@ -204,7 +134,7 @@ Check("same path → same sibling name", s1 == s2);
 Check("different path → different sibling name", s1 != s3);
 
 // ─────────────────────────────────────────────────────────────────────
-// 4. BlockContainmentVerifier — the containment join behind the
+// 3. BlockContainmentVerifier — the containment join behind the
 //    verify_block_containment bridge tool. All rows synthetic; the live
 //    halves (feed, kernel table, WMI, archive) are exercised by the app.
 // ─────────────────────────────────────────────────────────────────────
