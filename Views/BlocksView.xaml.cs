@@ -6,10 +6,12 @@ using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using AutoCommand.Services;
 
 namespace AutoCommand.Views
@@ -22,17 +24,37 @@ namespace AutoCommand.Views
         public bool HasRules;
         public bool RulesEnabled;      // any enabled rule → on
         public bool RulesStale;        // rule(s) point at a path that no longer exists on disk
-        public string StatusGlyph => !HasRules ? "⚠" : RulesStale ? "🕳" : RulesEnabled ? "⛔" : "⏸";
+        public int RulesCount;         // rules the firewall holds for this target
+        public int EnabledCount;       // how many of them are enabled (partial when 0 < n < RulesCount)
+        public string StatusGlyph => !HasRules ? "⚠" : RulesStale ? "🕳" : !RulesEnabled ? "⏸"
+            : EnabledCount < RulesCount ? "◐" : "⛔";
         public string StatusToolTip => !HasRules
             ? "No firewall rules found for this target (removed elsewhere, or created by an older tool)"
             : RulesStale
             ? "Stale — the rule's program path no longer exists (app updated or moved). It cannot block anything until coverage is re-pointed; AppBlockCoverageService extends it when the process reappears and retires the dead rule."
-            : RulesEnabled ? "Active — outbound traffic to this target is blocked"
-            : "Paused — rules exist but are disabled; traffic flows";
+            : RulesEnabled
+            ? (EnabledCount < RulesCount
+                ? $"Partial — only {EnabledCount} of {RulesCount} rule(s) are enabled; the disabled ones let traffic through"
+                : $"Active — all {RulesCount} rule(s) enabled; outbound traffic to this target is blocked")
+            : $"Paused — {RulesCount} rule(s) exist but are disabled; traffic flows"
+                + (PausedShort != null ? $"\n⏸ {PausedShort}" : "");
+
+        /// <summary>Why this block is off, at a glance: "3d · Blocks tab".
+        /// Null when no pause event/history is known.</summary>
+        public string PausedShort;
+        public string PausedInfoToolTip;
 
         public string Target => Record.IsIp ? Record.Key
             : System.IO.Path.GetFileName(Record.Key);
         public string TargetToolTip => Record.Key;
+
+        // ── bulk-resume selection (paused rows only) ──
+        public bool IsSelected;
+        public bool CanSelect;         // paused rows only — active ones have nothing to resume
+        public string SelectionKey => Record.Kind + ":" + Record.Key;
+        public string SelectionToolTip => CanSelect
+            ? "Check to add this paused block to the bulk-resume selection"
+            : "Only paused blocks can be selected — active ones have nothing to resume";
 
         /// <summary>The service that made the blocked connection — the row's
         /// own answer to "which network service did I block?", independent of
@@ -96,7 +118,7 @@ namespace AutoCommand.Views
         public string DisplayName;
         public string Description;
         public ServiceImpact Impact;
-        public string Summary;          // "6 blocks · 4 Akamai · 2 Azure · 1 paused"
+        public string Summary;          // "6 blocks · 4 Akamai · 2 Azure · ⚠ 1 LEAKING"
         public string ImpactGlyph => Impact switch
         {
             ServiceImpact.High => "🔴",
@@ -109,19 +131,46 @@ namespace AutoCommand.Views
             ServiceImpact.Medium => "Medium impact — blocking this degrades Windows features",
             _ => "Normal impact — routine blocking target",
         };
+
+        /// <summary>Every row of the group, unfiltered — the truth the header
+        /// state bar is computed from and bulk actions scope over.</summary>
+        public List<BlockRowVm> AllRows = new();
+        /// <summary>Rows currently shown — the active filter's slice.</summary>
         public List<BlockRowVm> Rows = new();
+
+        public int ActiveCount;        // rules present and enabled
+        public int PausedCount;        // rules present, all disabled
+        public int NoRulesCount;       // no rules on disk at all
         public bool Expanded;
-        public bool AnyEnabled => Rows.Any(r => r.RulesEnabled);
-        public string GroupActionLabel => AnyEnabled ? $"⏸ Pause all ({Rows.Count})" : $"▶ Resume all ({Rows.Count})";
-        public string GroupActionToolTip => AnyEnabled
-            ? "Disables every block rule in this group — traffic resumes for all of them. Fully reversible (nothing is deleted)."
-            : "Re-enables every block rule in this group.";
+
+        public bool HasActive => ActiveCount > 0;
+        public bool HasPaused => PausedCount > 0;
+        public string PauseLabel => $"⏸ Pause active ({ActiveCount})";
+        public string ResumeLabel => $"▶ Resume paused ({PausedCount})";
+        public string StateText => $"{ActiveCount} active · {PausedCount} paused"
+            + (NoRulesCount > 0 ? $" · {NoRulesCount} no-rules" : "");
+        public string StateToolTip => "Green = active blocks (traffic blocked), amber = paused (rules disabled, traffic flows)"
+            + (NoRulesCount > 0 ? $"\n{NoRulesCount} target(s) have no firewall rules on disk — nothing to toggle." : "");
+
+        // Star-widths for the proportional state bar; "0*" collapses a segment.
+        public string ActiveStar => ActiveCount > 0 ? $"{ActiveCount}*" : "0*";
+        public string PausedStar => PausedCount > 0 ? $"{PausedCount}*" : "0*";
     }
 
     // ── the tab ───────────────────────────────────────────────────────────
 
     public partial class BlocksView : UserControl
     {
+        private enum BlockFilter { All, Active, Paused, Partial, HighImpact, Unattributed, MsInfra }
+
+        private sealed class FilterChip
+        {
+            public readonly BlockFilter Mode;
+            private readonly string _label;
+            public FilterChip(BlockFilter mode, string label) { Mode = mode; _label = label; }
+            public override string ToString() => _label;
+        }
+
         private bool _loading;
         private readonly Dictionary<string, (DateTime utc, string source)?> _trafficCache =
             new(StringComparer.OrdinalIgnoreCase);
@@ -135,9 +184,23 @@ namespace AutoCommand.Views
         // to know the button exists to see service names.
         private bool _autoRepairStarted;
 
+        // State ribbon / lens / selection
+        private BlockFilter _filter = BlockFilter.All;
+        private bool _buildingFilter;
+        private List<BlockRowVm> _allRows = new();
+        private List<BlockGroupVm> _allGroups = new();
+        private readonly HashSet<string> _selectedKeys = new(StringComparer.OrdinalIgnoreCase);
+        private bool _syncingSelection;
+
+        // Post-action undo
+        private DispatcherTimer _toastTimer;
+        private List<(string kind, string key, bool wasEnabled)> _undoSnapshot;
+
         public BlocksView()
         {
             InitializeComponent();
+            _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
+            _toastTimer.Tick += (s, a) => HideToast();
             IsVisibleChanged += (s, e) => { if (IsVisible) _ = ReloadAsync(); };
             Loaded += (s, e) => _ = ReloadAsync();
         }
@@ -199,6 +262,11 @@ namespace AutoCommand.Views
                 }
                 if (records.Count == 0 || BlocksStore.Records.Count != records.Count) records = BlocksStore.Records.ToList();
 
+                // Pause provenance: the newest "paused" event per target from
+                // the audit log's tail — the "⏸ 3d · Blocks tab" answer to
+                // "why is this block off?".
+                var pauseHist = await System.Threading.Tasks.Task.Run(LoadPauseHistory);
+
                 var vms = new List<BlockRowVm>();
                 foreach (var r in records)
                 {
@@ -206,15 +274,35 @@ namespace AutoCommand.Views
                     byKey.TryGetValue(invKey, out var t);
                     int rules = t?.Rules ?? 0;
                     int enabled = t?.EnabledRules ?? 0;
-                    vms.Add(new BlockRowVm
+                    var vm = new BlockRowVm
                     {
                         Record = r,
                         HasRules = rules > 0,
                         RulesEnabled = enabled > 0,
+                        RulesCount = rules,
+                        EnabledCount = enabled,
                         RulesStale = (t?.StaleRules ?? 0) > 0,
                         ClassBrush = BrushForClass(r),
                         LastTrafficBrush = (Brush)FindResource("TextSecondaryBrush"),
-                    });
+                    };
+                    vm.CanSelect = vm.HasRules && !vm.RulesEnabled;
+                    if (vm.CanSelect)
+                    {
+                        string hk = r.Kind + ":" + r.Key;
+                        if (pauseHist.TryGetValue(hk, out var h))
+                        {
+                            vm.PausedShort = $"{ShortAge(DateTime.UtcNow - h.utc)} · {FriendlyOrigin(h.origin)}";
+                            vm.PausedInfoToolTip =
+                                $"Paused at {h.utc.ToLocalTime():yyyy-MM-dd HH:mm:ss local} via {FriendlyOrigin(h.origin)}\n" +
+                                "Recoverable in one step: the '⏸ Paused' chip shows every paused block, then 'Resume paused' restores them all.";
+                        }
+                        else if (r.Status == "off")
+                        {
+                            vm.PausedShort = $"{ShortAge(DateTime.UtcNow - r.StatusUtc)}";
+                            vm.PausedInfoToolTip = $"Paused at {r.StatusUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss local}";
+                        }
+                    }
+                    vms.Add(vm);
                 }
 
                 // "last transmitted packets": freshest live row first, else the
@@ -283,7 +371,10 @@ namespace AutoCommand.Views
                         }
                         if (!vm.RulesEnabled)
                         {
-                            SetContainment(vm, "paused", "paused", "TextSecondaryBrush",
+                            SetContainment(vm, "paused",
+                                vm.PausedShort != null ? "⏸ " + vm.PausedShort : "paused",
+                                "TextSecondaryBrush",
+                                (vm.PausedInfoToolTip != null ? vm.PausedInfoToolTip + "\n\n" : "") +
                                 "Rules are disabled — traffic flows by design, so containment is moot.");
                             continue;
                         }
@@ -373,6 +464,46 @@ namespace AutoCommand.Views
             finally { _loading = false; }
         }
 
+        /// <summary>Newest "paused" event per kind:key from the audit log's
+        /// tail — pause provenance without parsing the whole history.</summary>
+        private Dictionary<string, (DateTime utc, string origin)> LoadPauseHistory()
+        {
+            var result = new Dictionary<string, (DateTime, string)>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (!File.Exists(BlocksStore.EventLogPath)) return result;
+                using var fs = new FileStream(BlocksStore.EventLogPath, FileMode.Open,
+                    FileAccess.Read, FileShare.ReadWrite);
+                int tail = (int)Math.Min(fs.Length, 256 * 1024);
+                fs.Seek(-tail, SeekOrigin.End);
+                using var sr = new StreamReader(fs);
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    // utc|action|kind|key|detail|origin
+                    var p = line.Split('|');
+                    if (p.Length < 6 || p[1] != "paused") continue;
+                    if (!DateTime.TryParse(p[0], null,
+                            System.Globalization.DateTimeStyles.RoundtripKind, out var utc)) continue;
+                    result[p[2] + ":" + p[3]] = (utc.ToUniversalTime(), p[5]);
+                }
+            }
+            catch { /* history is best-effort */ }
+            return result;
+        }
+
+        private static string FriendlyOrigin(string origin) => origin switch
+        {
+            "restore-guide" => "Restore guide",
+            "blocks-tab" => "Blocks tab",
+            "monitor" => "Process monitor",
+            "migration" => "import",
+            "repair" => "attribution repair",
+            "undo" => "undo",
+            "" or null => "unknown surface",
+            _ => origin,
+        };
+
         private void ApplyArchiveTraffic(BlockRowVm vm, (DateTime utc, string source)? hit)
         {
             if (hit == null)
@@ -413,6 +544,7 @@ namespace AutoCommand.Views
 
         private void Render(List<BlockRowVm> vms)
         {
+            _allRows = vms;
             var groups = vms.GroupBy(v => BlocksStore.ServiceGroupKey(v.Record))
                 .Select(g =>
                 {
@@ -429,11 +561,12 @@ namespace AutoCommand.Views
                     var classes = g.GroupBy(v => v.Record.ClassAtBlock ?? "?")
                         .OrderByDescending(x => x.Count())
                         .Select(x => $"{x.Count()} {x.Key}");
-                    int paused = g.Count(v => v.HasRules && !v.RulesEnabled);
                     int gLeak = g.Count(v => v.ContainmentVerdict == BlockContainmentVerifier.Leak);
                     int gStale = g.Count(v => v.ContainmentVerdict == BlockContainmentVerifier.StaleFlow);
                     int gContained = g.Count(v => v.ContainmentVerdict == BlockContainmentVerifier.Contained);
 
+                    var ordered = g.OrderBy(v => v.Record.IsIp ? 0 : 1)
+                        .ThenBy(v => v.Record.Key).ToList();
                     return new BlockGroupVm
                     {
                         ServiceKey = key,
@@ -444,38 +577,293 @@ namespace AutoCommand.Views
                             "Repair attribution may recover more detail.",
                         Impact = impact,
                         Summary = $"{g.Count()} block{(g.Count() == 1 ? "" : "s")} · {string.Join(" · ", classes)}" +
-                            (paused > 0 ? $" · {paused} paused" : "") +
                             (gLeak > 0 ? $" · ⚠ {gLeak} LEAKING" :
                              gStale > 0 ? $" · {gStale} stale flow" :
                              gContained > 0 ? $" · {gContained} contained" : ""),
-                        Rows = g.OrderBy(v => v.Record.IsIp ? 0 : 1)
-                                .ThenBy(v => v.Record.Key).ToList(),
+                        AllRows = ordered,
+                        Rows = ordered,
+                        ActiveCount = ordered.Count(v => v.RulesEnabled),
+                        PausedCount = ordered.Count(v => v.HasRules && !v.RulesEnabled),
+                        NoRulesCount = ordered.Count(v => !v.HasRules),
                         Expanded = impact == ServiceImpact.High,
                     };
                 })
                 .OrderByDescending(g => (int)g.Impact)
-                .ThenByDescending(g => g.Rows.Count)
+                .ThenByDescending(g => g.AllRows.Count)
                 .ToList();
+            _allGroups = groups;
 
-            GroupsList.ItemsSource = groups;
-
+            // ── state ribbon + command bar ──
             int active = vms.Count(v => v.RulesEnabled);
+            int activeRules = vms.Where(v => v.RulesEnabled).Sum(v => v.RulesCount);
             int pausedN = vms.Count(v => v.HasRules && !v.RulesEnabled);
-            int high = groups.Where(g => g.Impact == ServiceImpact.High).Sum(g => g.Rows.Count);
+            int pausedRules = vms.Where(v => v.HasRules && !v.RulesEnabled).Sum(v => v.RulesCount);
+            int partial = vms.Count(v => v.HasRules && v.EnabledCount > 0 && v.EnabledCount < v.RulesCount);
+            int high = groups.Where(g => g.Impact == ServiceImpact.High).Sum(g => g.AllRows.Count);
             int msInfra = vms.Count(v => v.Record.ClassAtBlock is string c &&
                 (c.Contains("Microsoft/Azure") || c.Contains("Akamai") || c.Contains("Gcore")));
             int unattr = vms.Count(v => BlocksStore.ServiceGroupKey(v.Record) == "svchost:unresolved");
 
-            TotalChip.Text = $"{vms.Count} blocks · {groups.Count} groups";
-            ActiveChip.Text = $"⛔ {active} active";
-            PausedChip.Text = $"⏸ {pausedN} paused";
-            HighImpactChip.Text = $"🔴 {high} high-impact";
-            UnattributedChip.Text = $"❓ {unattr} unattributed";
-            MsInfraChip.Text = $"⚠ {msInfra} on Microsoft infra";
-            HighImpactChipBorder.Visibility = high > 0 ? Visibility.Visible : Visibility.Collapsed;
-            UnattributedChipBorder.Visibility = unattr > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BuildFilterChips(vms.Count, groups.Count, active, pausedN, partial, high, msInfra, unattr);
+
+            ResumePausedBtn.Content = $"▶ Resume paused ({pausedN} target(s) · {pausedRules} rules)";
+            ResumePausedBtn.IsEnabled = pausedN > 0;
+            PauseActiveBtn.Content = $"⏸ Pause active ({active} target(s) · {activeRules} rules)";
+            PauseActiveBtn.IsEnabled = active > 0;
+            SelectAllPausedChk.Visibility = pausedN > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // selection survives reloads only for still-paused rows
+            var pausedKeys = new HashSet<string>(
+                vms.Where(v => v.CanSelect).Select(v => v.SelectionKey),
+                StringComparer.OrdinalIgnoreCase);
+            _selectedKeys.IntersectWith(pausedKeys);
+            foreach (var v in vms) v.IsSelected = _selectedKeys.Contains(v.SelectionKey);
+            UpdateSelectionUi();
+
+            ApplyFilter();
 
             RebuildRestorePanel(vms, high, active);
+        }
+
+        // ── state ribbon (filters) ─────────────────────────────────────────
+
+        private void BuildFilterChips(int total, int groupsCount, int active, int paused,
+            int partial, int high, int msInfra, int unattr)
+        {
+            _buildingFilter = true;
+            var chips = new List<FilterChip>
+            {
+                new(BlockFilter.All, $"{total} blocks · {groupsCount} groups"),
+                new(BlockFilter.Active, $"⛔ {active} active"),
+                new(BlockFilter.Paused, $"⏸ {paused} paused"),
+            };
+            if (partial > 0) chips.Add(new(BlockFilter.Partial, $"◐ {partial} partial"));
+            if (high > 0) chips.Add(new(BlockFilter.HighImpact, $"🔴 {high} high-impact"));
+            if (msInfra > 0) chips.Add(new(BlockFilter.MsInfra, $"⚠ {msInfra} on Microsoft infra"));
+            if (unattr > 0) chips.Add(new(BlockFilter.Unattributed, $"❓ {unattr} unattributed"));
+            FilterList.ItemsSource = chips;
+            int sel = chips.FindIndex(c => c.Mode == _filter);
+            if (sel < 0) { _filter = BlockFilter.All; sel = 0; }
+            FilterList.SelectedIndex = sel;
+            _buildingFilter = false;
+        }
+
+        private void FilterList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_buildingFilter) return;
+            if (FilterList.SelectedItem is FilterChip chip) _filter = chip.Mode;
+            ApplyFilter();
+        }
+
+        /// <summary>The lens: re-slices every group's rows through the active
+        /// filter and hides groups left empty. The unfiltered truth stays in
+        /// AllRows, so counts and bulk actions never depend on the lens.</summary>
+        private void ApplyFilter()
+        {
+            var shown = new List<BlockGroupVm>();
+            foreach (var g in _allGroups)
+            {
+                if (_filter == BlockFilter.HighImpact && g.Impact != ServiceImpact.High) continue;
+                IEnumerable<BlockRowVm> rows = g.AllRows;
+                rows = _filter switch
+                {
+                    BlockFilter.Active => rows.Where(r => r.RulesEnabled),
+                    BlockFilter.Paused => rows.Where(r => r.HasRules && !r.RulesEnabled),
+                    BlockFilter.Partial => rows.Where(r => r.HasRules && r.EnabledCount > 0 && r.EnabledCount < r.RulesCount),
+                    BlockFilter.Unattributed => rows.Where(r => BlocksStore.ServiceGroupKey(r.Record) == "svchost:unresolved"),
+                    BlockFilter.MsInfra => rows.Where(r => r.Record.ClassAtBlock is string c &&
+                        (c.Contains("Microsoft/Azure") || c.Contains("Akamai") || c.Contains("Gcore"))),
+                    _ => rows,
+                };
+                var list = rows.ToList();
+                if (list.Count == 0) continue;
+                g.Rows = list;
+                shown.Add(g);
+            }
+            GroupsList.ItemsSource = shown;
+        }
+
+        // ── selection (the paused lens's bulk-resume basket) ───────────────
+
+        private void RowSelect_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not CheckBox chk || chk.Tag is not BlockRowVm vm) return;
+            vm.IsSelected = chk.IsChecked == true;
+            if (vm.IsSelected) _selectedKeys.Add(vm.SelectionKey);
+            else _selectedKeys.Remove(vm.SelectionKey);
+            UpdateSelectionUi();
+        }
+
+        private void SelectAllPaused_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncingSelection) return;
+            bool on = SelectAllPausedChk.IsChecked == true;
+            _selectedKeys.Clear();
+            foreach (var r in _allRows.Where(r => r.CanSelect))
+            {
+                r.IsSelected = on;
+                if (on) _selectedKeys.Add(r.SelectionKey);
+            }
+            ApplyFilter();          // re-render the checkboxes
+            UpdateSelectionUi();
+        }
+
+        private void UpdateSelectionUi()
+        {
+            var sel = _allRows.Where(r => r.IsSelected).ToList();
+            ResumeSelectedBtn.Visibility = sel.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (sel.Count > 0)
+                ResumeSelectedBtn.Content = $"▶ Resume selected ({sel.Count} target(s) · {sel.Sum(r => r.RulesCount)} rules)";
+
+            int pausedTotal = _allRows.Count(r => r.CanSelect);
+            _syncingSelection = true;
+            SelectAllPausedChk.IsChecked = sel.Count == 0 ? false
+                : sel.Count >= pausedTotal ? true : null;
+            _syncingSelection = false;
+        }
+
+        // ── bulk actions: preview → apply → undo ───────────────────────────
+
+        private static ServiceImpact GroupImpactFor(BlockRecord r)
+        {
+            string key = BlocksStore.ServiceGroupKey(r);
+            ServiceCatalog.TryGet(key, out var info);
+            var impact = info?.Impact ?? ServiceImpact.Normal;
+            if (impact < ServiceImpact.Medium && r.ClassAtBlock is string c &&
+                (c.Contains("Microsoft/Azure") || c.Contains("Akamai") || c.Contains("Gcore")))
+                impact = ServiceImpact.Medium;
+            return impact;
+        }
+
+        /// <summary>The one path every bulk pause/resume takes: build the
+        /// grouped preview, let the user scope it (all / except high-impact),
+        /// apply, record one audit event, and offer undo on the toast.</summary>
+        private async System.Threading.Tasks.Task BulkToggleAsync(List<BlockRowVm> scope, bool enable, string scopeLabel)
+        {
+            if (scope == null || scope.Count == 0) return;
+
+            var previewGroups = scope.GroupBy(v => BlocksStore.ServiceGroupKey(v.Record))
+                .Select(g =>
+                {
+                    var impact = GroupImpactFor(g.First().Record);
+                    return new BulkGroupLine
+                    {
+                        Glyph = impact switch
+                        {
+                            ServiceImpact.High => "🔴",
+                            ServiceImpact.Medium => "🟠",
+                            _ => "⚪",
+                        },
+                        DisplayName = ServiceCatalog.DisplayNameFor(g.Key, g.First().Record.SvcDisplayName),
+                        Targets = g.Count(),
+                        Rules = g.Sum(v => v.RulesCount),
+                        HighImpact = impact == ServiceImpact.High,
+                        Warning = impact == ServiceImpact.High
+                            ? (enable
+                                ? "re-enables blocking on a service Windows depends on — security features, sign-in or updates may stop working again"
+                                : "lifts blocking on a service Windows depends on — its traffic (updates, sign-in, security checks) flows again")
+                            : "",
+                    };
+                })
+                .ToList();
+
+            var win = new BlockBulkPreviewWindow(enable ? "Resume" : "Pause", previewGroups)
+            {
+                Owner = Window.GetWindow(this),
+            };
+            if (win.ShowDialog() != true) return;
+
+            var final = win.ExcludeHighImpact
+                ? scope.Where(v => GroupImpactFor(v.Record) != ServiceImpact.High).ToList()
+                : scope;
+            if (final.Count == 0) return;
+
+            // before-state snapshot powers the undo
+            var snapshot = final.Select(v => (v.Record.Kind, v.Record.Key, v.RulesEnabled)).ToList();
+            var targets = final.Select(v => (v.Record.Kind, v.Record.Key)).ToList();
+
+            var (matched, changed) = await FirewallService.Instance.SetTargetsEnabledAsync(targets, enable);
+            BlocksStore.SetStatuses(targets, enable ? "on" : "off", "blocks-tab");
+
+            string verb = enable ? "Resumed" : "Paused";
+            ShowBulkToast($"{verb} {final.Count} target(s) — {changed}/{matched} rules changed · {scopeLabel}",
+                snapshot);
+            await ReloadAsync();
+        }
+
+        private async void ResumePausedBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var scope = _allRows.Where(r => r.CanSelect).ToList();
+            await BulkToggleAsync(scope, true, "all paused blocks");
+        }
+
+        private async void PauseActiveBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var scope = _allRows.Where(r => r.RulesEnabled).ToList();
+            await BulkToggleAsync(scope, false, "all active blocks");
+        }
+
+        private async void ResumeSelectedBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var scope = _allRows.Where(r => r.IsSelected).ToList();
+            await BulkToggleAsync(scope, true, "your selection");
+        }
+
+        private async void GroupResume_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is not BlockGroupVm g) return;
+            await BulkToggleAsync(g.AllRows.Where(r => r.HasRules && !r.RulesEnabled).ToList(),
+                true, g.DisplayName);
+        }
+
+        private async void GroupPause_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is not BlockGroupVm g) return;
+            await BulkToggleAsync(g.AllRows.Where(r => r.RulesEnabled).ToList(),
+                false, g.DisplayName);
+        }
+
+        // ── undo toast ─────────────────────────────────────────────────────
+
+        private void ShowBulkToast(string message, List<(string kind, string key, bool wasEnabled)> snapshot)
+        {
+            _undoSnapshot = snapshot;
+            BlockToastText.Text = message;
+            BlockToastUndoBtn.Visibility = snapshot is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+            BlockToast.Visibility = Visibility.Visible;
+            _toastTimer.Stop();
+            _toastTimer.Start();
+        }
+
+        private void HideToast()
+        {
+            _toastTimer.Stop();
+            BlockToast.Visibility = Visibility.Collapsed;
+            _undoSnapshot = null;
+        }
+
+        private async void BlockToastUndo_Click(object sender, RoutedEventArgs e)
+        {
+            var snap = _undoSnapshot;
+            _toastTimer.Stop();
+            BlockToast.Visibility = Visibility.Collapsed;
+            _undoSnapshot = null;
+            if (snap == null || snap.Count == 0) return;
+
+            // restore each target to its pre-action state
+            var toOn = snap.Where(t => t.wasEnabled).Select(t => (t.kind, t.key)).ToList();
+            var toOff = snap.Where(t => !t.wasEnabled).Select(t => (t.kind, t.key)).ToList();
+            if (toOn.Count > 0)
+            {
+                await FirewallService.Instance.SetTargetsEnabledAsync(toOn, true);
+                BlocksStore.SetStatuses(toOn, "on", "undo");
+            }
+            if (toOff.Count > 0)
+            {
+                await FirewallService.Instance.SetTargetsEnabledAsync(toOff, false);
+                BlocksStore.SetStatuses(toOff, "off", "undo");
+            }
+            await ReloadAsync();
         }
 
         // ── restore guide ─────────────────────────────────────────────────
@@ -570,21 +958,11 @@ namespace AutoCommand.Views
             if (_restoreSymptom == null || _restoreMatches.Count == 0) return;
             var sym = _restoreSymptom;
 
-            string targets = string.Join("\n", _restoreMatches.Take(12).Select(v =>
-                $"  {GroupLabel(v.Record)} · {(v.Record.IsIp ? v.Record.Key : System.IO.Path.GetFileName(v.Record.Key))}")) +
-                (_restoreMatches.Count > 12 ? $"\n  … and {_restoreMatches.Count - 12} more" : "");
-            if (MessageBox.Show(
-                    $"Restore '{sym.Title}' by pausing {_restoreMatches.Count} matching block(s)?\n\n" +
-                    $"{sym.Notice}\n\n{targets}\n\n" +
-                    "Traffic resumes immediately. Fully reversible — nothing is deleted; the Blocks list keeps every record for re-enabling.",
-                    "Restore service", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-
             var list = _restoreMatches.Select(v => (v.Record.Kind, v.Record.Key)).ToList();
             var (matched, changed) = await FirewallService.Instance.SetTargetsEnabledAsync(list, false);
-            foreach (var v in _restoreMatches)
-                BlocksStore.SetStatus(v.Record.Kind, v.Record.Key, "off", "restore-guide");
-            BlocksStore.AppendEvent("paused", "-", "-",
-                $"restore '{sym.Title}': {changed}/{matched} rules", "restore-guide");
+            BlocksStore.SetStatuses(list, "off", "restore-guide");
+            ShowBulkToast($"Paused {list.Count} block(s) for '{sym.Title}' — {changed}/{matched} rules · traffic resumes",
+                list.Select(v => (v.Kind, v.Key, true)).ToList());
             await ReloadAsync();
         }
 
@@ -599,32 +977,6 @@ namespace AutoCommand.Views
             BlocksStore.SetStatus(vm.Record.Kind, vm.Record.Key, enable ? "on" : "off");
             BlocksStore.AppendEvent(enable ? "resumed" : "paused", vm.Record.Kind, vm.Record.Key,
                 $"{changed}/{matched} rules", "blocks-tab");
-            await ReloadAsync();
-        }
-
-        private async void GroupToggle_Click(object sender, RoutedEventArgs e)
-        {
-            if ((sender as FrameworkElement)?.Tag is not BlockGroupVm g) return;
-            bool enable = !g.AnyEnabled;
-
-            string impact = g.Impact switch
-            {
-                ServiceImpact.High => "\n\n⚠ HIGH IMPACT — this group keeps Windows security features, sign-in or updates working.",
-                ServiceImpact.Medium => "\n\n⚠ These blocks sit on infrastructure Windows features depend on.",
-                _ => "",
-            };
-            string targets = string.Join("\n", g.Rows.Take(12).Select(r => $"  {(enable ? "resume" : "pause")}  {r.Target}")) +
-                (g.Rows.Count > 12 ? $"\n  … and {g.Rows.Count - 12} more" : "");
-            if (MessageBox.Show(
-                    $"{(enable ? "RESUME" : "PAUSE")} all {g.Rows.Count} block(s) for:\n{g.DisplayName}{impact}\n\n{targets}",
-                    (enable ? "Resume" : "Pause") + " service group",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-
-            var targetsList = g.Rows.Select(r => (r.Record.Kind, r.Record.Key)).ToList();
-            var (matched, changed) = await FirewallService.Instance.SetTargetsEnabledAsync(targetsList, enable);
-            BlocksStore.SetStatusForGroup(g.ServiceKey, enable ? "on" : "off");
-            BlocksStore.AppendEvent(enable ? "resumed" : "paused", "-", "-",
-                $"{g.DisplayName}: {changed}/{matched} rules", "blocks-tab");
             await ReloadAsync();
         }
 

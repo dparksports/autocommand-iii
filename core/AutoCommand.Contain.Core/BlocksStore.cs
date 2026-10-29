@@ -435,6 +435,33 @@ namespace AutoCommand.Contain.Core
             }
         }
 
+        /// <summary>Batch form of SetStatus for an explicit target list — one
+        /// lock, one save and one audit event for a bulk pause/resume, instead
+        /// of a file rewrite per record.</summary>
+        public void SetStatuses(IEnumerable<(string Kind, string Key)> targets, string status, string origin = "blocks-tab")
+        {
+            lock (_gate)
+            {
+                Load();
+                var set = new HashSet<string>(targets.Select(t => t.Kind + ":" + t.Key),
+                    StringComparer.OrdinalIgnoreCase);
+                int n = 0;
+                foreach (var r in _records.Where(b => set.Contains(b.Kind + ":" + b.Key)))
+                {
+                    if (r.Status == status) continue;
+                    r.Status = status;
+                    r.StatusUtc = DateTime.UtcNow;
+                    n++;
+                }
+                if (n > 0)
+                {
+                    Save();
+                    AppendEvent(status == "on" ? "resumed" : "paused", "-", "-",
+                        $"{n} target(s) via {origin}", origin);
+                }
+            }
+        }
+
         /// <summary>Bulk status flip for a whole service group (fired after the
         /// firewall rules are toggled so the log reflects the actual outcome).</summary>
         public void SetStatusForGroup(string serviceKey, string status, string origin = "blocks-tab")
@@ -561,6 +588,7 @@ namespace AutoCommand.Contain.Core
         public static void AddOrUpdate(BlockRecord record, string origin = "monitor") => _default.AddOrUpdate(record, origin);
         public static void Remove(string kind, string key, string origin = "monitor") => _default.Remove(kind, key, origin);
         public static void SetStatus(string kind, string key, string status, string origin = "blocks-tab") => _default.SetStatus(kind, key, status, origin);
+        public static void SetStatuses(System.Collections.Generic.IEnumerable<(string Kind, string Key)> targets, string status, string origin = "blocks-tab") => _default.SetStatuses(targets, status, origin);
         public static void SetStatusForGroup(string serviceKey, string status, string origin = "blocks-tab") => _default.SetStatusForGroup(serviceKey, status, origin);
         public static void SetAttribution(string kind, string key, string serviceKey, string displayName, string source) => _default.SetAttribution(kind, key, serviceKey, displayName, source);
         public static void SetAttributions(System.Collections.Generic.IEnumerable<(string Kind, string Key, string ServiceKey, string DisplayName, string Source)> items) => _default.SetAttributions(items);
