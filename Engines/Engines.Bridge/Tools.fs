@@ -43,7 +43,7 @@ type IAgentBridgeUI =
 /// serialized; handlers re-parse it.
 /// </summary>
 type IAgentTool =
-    /// <summary>Tool name as MCP clients see it (e.g. "block_ip").</summary>
+    /// <summary>Tool name as MCP clients see it (e.g. "open_gate").</summary>
     abstract Name: string
 
     /// <summary>True when every call needs the per-action confirmation

@@ -284,30 +284,6 @@ namespace AutoCommand.Agent.Core
             // ── mutating: only present when the session allows, each call confirmed ──
 
             new Tool(
-                "block_ip",
-                "Create outbound TCP+UDP firewall block rules for a remote IP (the same 2-rule scheme " +
-                "and provenance notes as the app's Process Monitor). Asks the user in AutoCommand for every call.",
-                Schema(("ip", "Remote IP to block", true),
-                       ("reason", "Why — stored in the rule's provenance description", false)),
-                true,
-                a => BlockIp(a).GetAwaiter().GetResult(),
-                a => $"Create outbound firewall BLOCK rules for {a["ip"]}?\n\n{IpClassifier.WarningText(a["ip"]?.GetValue<string>())}" +
-                     ReasonSuffix(a)),
-
-            new Tool(
-                "unblock_ip",
-                "Remove firewall block rules previously created for a remote IP. Asks the user for every call.",
-                Schema(("ip", "Remote IP to unblock", true)),
-                true,
-                a =>
-                {
-                    int n = FirewallService.Instance.RemoveBlockRulesForIpAsync(a["ip"]?.GetValue<string>())
-                                   .GetAwaiter().GetResult();
-                    return $"Removed {n} rule(s).";
-                },
-                a => $"Remove firewall block rules for {a["ip"]}?"),
-
-            new Tool(
                 "open_gate",
                 "Temporarily stop blocking ONE specific blocked IP or process image (all instances of that " +
                 "exe — firewall rules cannot distinguish PIDs). The user confirms the exact target in " +
@@ -1004,7 +980,7 @@ namespace AutoCommand.Agent.Core
                           "AutoCommand's blocked list. Connects to those fail INSTANTLY with access-denied " +
                           "(kernel-level firewall block), which browsers show as 'This site can't be reached'. " +
                           "Because blocks are per-IP and this host rotates addresses, the site may work from " +
-                          "other networks or fail intermittently. Unblock via unblock_ip or the Blocks tab.";
+                          "other networks or fail intermittently. Open a temporary gate via open_gate, or manage the block in the Blocks tab.";
             else if (rows.Any(r => ((JsonNode)r!["blocked_attempts_" + minutes + "m"]).GetValue<int>() > 0))
                 verdict = "No currently-resolved address is blocked, but blocked-connect attempts were seen " +
                           "recently — DNS rotation likely served a blocked address earlier. List the feed with " +
@@ -1380,19 +1356,6 @@ namespace AutoCommand.Agent.Core
             return arr;
         }
 
-
-        private static async Task<string> BlockIp(JsonObject a)
-        {
-            string ip = a["ip"]?.GetValue<string>();
-            if (!System.Net.IPAddress.TryParse(ip, out _)) return $"'{ip}' is not a valid IP address.";
-            string reason = a["reason"]?.GetValue<string>();
-            string note = $"[agent request, user-confirmed {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC]" +
-                          (string.IsNullOrEmpty(reason) ? "" : $" {reason}") + " · AutoCommand AI access";
-            var (created, updated) = await FirewallService.Instance.AddIpBlockAsync(ip, note);
-            return created > 0
-                ? $"Blocked {ip} — {created} outbound TCP/UDP rule(s) created, provenance written to the rule description."
-                : $"Block for {ip} already existed — refreshed its provenance ({updated} rule(s)).";
-        }
 
         private static string KillProcess(JsonObject a)
         {

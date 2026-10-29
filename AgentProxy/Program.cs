@@ -49,9 +49,7 @@ const string OfflineToolsJson = """
   { "name": "get_phonehome_cards", "description": "Curated cards per well-known Windows talker — connects/hr vs the normal band, destinations, beacon regularity (needs an active session)." },
   { "name": "list_trace_projects", "description": "The Traces tab's user-defined tracing projects (needs an active session)." },
   { "name": "get_trace_project", "description": "One trace project's definition plus its measured snapshot (needs an active session)." },
-  { "name": "block_ip", "description": "Firewall-block a destination IP — a mutating action: only while a session runs with mutations enabled, and always confirmed in the app (needs an active session)." },
-  { "name": "unblock_ip", "description": "Remove a destination-IP firewall block — a mutating action, confirmed in the app (needs an active session)." },
-  { "name": "kill_process", "description": "Kill a process by PID — a mutating action, confirmed in the app (needs an active session)." },
+      { "name": "kill_process", "description": "Kill a process by PID — a mutating action, confirmed in the app (needs an active session)." },
   { "name": "disable_task", "description": "Disable a scheduled task — a mutating action, confirmed in the app (needs an active session)." }
 ]
 """;
