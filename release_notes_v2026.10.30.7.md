@@ -1,4 +1,4 @@
-# AutoCommand III — v2026.10.30.6
+# AutoCommand III — v2026.10.30.7
 
 The agent-surface release: six bridge fixes from field bug reports, and the
 mutating tool set pared down to exactly the gate pair.
