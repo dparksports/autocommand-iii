@@ -26,7 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="Sdk\AutoCommand.Sdk.csproj" />
     <!-- NetWatch core (phase 1 of the AutoCommand II extraction, see
          REWRITE.md): kernel TCP table, IP classification, DNS/RDAP, and the
          Sysmon engine family, physically moved out of this project into

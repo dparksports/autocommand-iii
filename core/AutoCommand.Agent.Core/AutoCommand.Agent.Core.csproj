@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <!-- The confirmation seam contract -->
-    <ProjectReference Include="..\..\Sdk\AutoCommand.Sdk.csproj" />
     <!-- The registry's tools wrap every other core's engines -->
     <ProjectReference Include="..\AutoCommand.NetWatch.Core\AutoCommand.NetWatch.Core.csproj" />
     <ProjectReference Include="..\AutoCommand.Intercept.Core\AutoCommand.Intercept.Core.csproj" />
