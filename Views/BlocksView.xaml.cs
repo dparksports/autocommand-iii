@@ -285,7 +285,7 @@ namespace AutoCommand.Views
                         EnabledCount = enabled,
                         RulesStale = (t?.StaleRules ?? 0) > 0,
                         ClassBrush = BrushForClass(r),
-                        LastTrafficBrush = (Brush)FindResource("TextSecondaryBrush"),
+                        LastTrafficBrush = (Brush)FindResource("BlocksMutedBrush"),
                     };
                     vm.CanSelect = vm.HasRules && !vm.RulesEnabled;
                     if (vm.CanSelect)
@@ -367,7 +367,7 @@ namespace AutoCommand.Views
                     {
                         if (!vm.HasRules)
                         {
-                            SetContainment(vm, "—", "—", "TextSecondaryBrush",
+                            SetContainment(vm, "—", "—", "BlocksMutedBrush",
                                 "No firewall rules exist for this target — nothing to contain.");
                             continue;
                         }
@@ -375,7 +375,7 @@ namespace AutoCommand.Views
                         {
                             SetContainment(vm, "paused",
                                 vm.PausedShort != null ? "⏸ " + vm.PausedShort : "off",
-                                "TextSecondaryBrush",
+                                "BlocksMutedBrush",
                                 (vm.PausedInfoToolTip != null ? vm.PausedInfoToolTip + "\n\n" : "") +
                                 "Blocking is OFF — traffic flows by design, so containment is moot.");
                             continue;
@@ -384,7 +384,7 @@ namespace AutoCommand.Views
                             snap.Instances, vm.Record.Kind, vm.Record.Key);
                         if (worst == null)
                         {
-                            SetContainment(vm, "quiet", "quiet", "TextSecondaryBrush",
+                            SetContainment(vm, "quiet", "quiet", "BlocksMutedBrush",
                                 "No blocked-connect attempts in the last hour — nothing is even trying " +
                                 "this target. The block may be dead weight (CDN edges rotate).");
                             continue;
@@ -424,7 +424,7 @@ namespace AutoCommand.Views
                 catch
                 {
                     foreach (var vm in vms)
-                        SetContainment(vm, "—", "—", "TextSecondaryBrush",
+                        SetContainment(vm, "—", "—", "BlocksMutedBrush",
                             "Containment join unavailable this refresh (feed, WMI or archive unreadable).");
                 }
 
@@ -541,7 +541,7 @@ namespace AutoCommand.Views
             if (c.Contains("Windows component")) return (Brush)FindResource("AccentRedBrush");
             if (c.Contains("Microsoft/Azure")) return (Brush)FindResource("AccentBlueBrush");
             if (c.Contains("Akamai") || c.Contains("Gcore")) return (Brush)FindResource("AccentAmberBrush");
-            return (Brush)FindResource("TextSecondaryBrush");
+            return (Brush)FindResource("BlocksMutedBrush");
         }
 
         private void Render(List<BlockRowVm> vms)

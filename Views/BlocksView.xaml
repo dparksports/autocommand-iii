@@ -4,6 +4,11 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- This tab's muted text: ~9.7:1 on the window background. The app's
+             TextSecondaryBrush (#98A2B3, ~6:1) reads as dim at 10-11 px on
+             this dense screen, so the Blocks tab carries its own brighter
+             gray while keeping TextPrimary for the hierarchy above it. -->
+        <SolidColorBrush x:Key="BlocksMutedBrush" Color="#B9C3D2"/>
     </UserControl.Resources>
 
     <Grid Margin="16,12,16,8">
@@ -30,8 +35,8 @@
                 <TextBlock Text="⛔ Blocks" FontSize="20" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <TextBlock Text="Every firewall block this app created — categories on the left, the selected category's blocks on the right, grouped by the Windows service that actually made the connection."
-                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"/>
-                <TextBlock x:Name="StatusText" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                           FontSize="11" Foreground="{StaticResource BlocksMutedBrush}" Margin="0,2,0,0"/>
+                <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource BlocksMutedBrush}" Margin="0,2,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -104,7 +109,7 @@
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                     <TextBlock Text="Broken feature:" FontSize="11" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,6,0"/>
+                               Foreground="{StaticResource BlocksMutedBrush}" Margin="0,0,6,0"/>
                     <ComboBox x:Name="SymptomCombo" MinWidth="300" FontSize="11"
                               SelectionChanged="SymptomCombo_SelectionChanged"/>
                     <Button x:Name="PauseMatchedBtn" Click="PauseMatchedBtn_Click" Margin="8,0,0,0"
@@ -133,6 +138,11 @@
                     CornerRadius="4" Margin="0,0,0,0">
                 <DockPanel>
                     <TextBox x:Name="SearchBox" DockPanel.Dock="Top" Margin="8,8,8,6" FontSize="12"
+                             Background="{DynamicResource BackgroundBrush}"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             CaretBrush="{DynamicResource TextPrimaryBrush}"
+                             SelectionBrush="{DynamicResource AccentBlueBrush}"
                              TextChanged="SearchBox_TextChanged"
                              ToolTip="Find a category or a target (IP / exe). Matching targets select their category."/>
                     <ListBox x:Name="MasterList" SelectionChanged="MasterList_SelectionChanged"
@@ -201,8 +211,8 @@
                                                 <Border Grid.Column="1" Background="{DynamicResource AccentAmberBrush}"/>
                                             </Grid>
                                         </Border>
-                                        <TextBlock Text="{Binding StateText}" FontSize="10"
-                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding StateText}" FontSize="11"
+                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -227,9 +237,9 @@
                                        Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <TextBlock x:Name="DetailSummaryText" FontSize="11" Margin="0,3,0,0"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                   Foreground="{StaticResource BlocksMutedBrush}"/>
                         <TextBlock x:Name="DetailDescText" FontSize="11" TextWrapping="Wrap" MaxWidth="880" Margin="0,3,0,0"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                   Foreground="{StaticResource BlocksMutedBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button x:Name="DetailRestoreBtn" Click="DetailRestoreBtn_Click" Padding="10,3" FontSize="11"
                                     Margin="0,0,8,0" Visibility="Collapsed"
@@ -268,27 +278,27 @@
                                         <TextBlock Grid.Column="2" Text="{Binding Target}" FontSize="11" FontFamily="Consolas"
                                                    Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding TargetToolTip}" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Grid.Column="3" Text="{Binding ServiceDisplay}" FontSize="10"
-                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                        <TextBlock Grid.Column="3" Text="{Binding ServiceDisplay}" FontSize="11"
+                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding ServiceToolTip}" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Grid.Column="4" Text="{Binding ClassDisplay}" FontSize="10"
+                                        <TextBlock Grid.Column="4" Text="{Binding ClassDisplay}" FontSize="11"
                                                    Foreground="{Binding ClassBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding ClassToolTip}"/>
-                                        <TextBlock Grid.Column="5" Text="{Binding CreatedDisplay}" FontSize="10"
-                                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                        <TextBlock Grid.Column="5" Text="{Binding CreatedDisplay}" FontSize="11"
+                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding CreatedToolTip}"/>
-                                        <TextBlock Grid.Column="6" Text="{Binding LastTraffic}" FontSize="10"
+                                        <TextBlock Grid.Column="6" Text="{Binding LastTraffic}" FontSize="11"
                                                    Foreground="{Binding LastTrafficBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding LastTrafficToolTip}"/>
-                                        <TextBlock Grid.Column="7" Text="{Binding Containment}" FontSize="10" FontWeight="SemiBold"
+                                        <TextBlock Grid.Column="7" Text="{Binding Containment}" FontSize="11" FontWeight="SemiBold"
                                                    Foreground="{Binding ContainmentBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding ContainmentToolTip}"/>
                                         <StackPanel Grid.Column="8" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <Button Content="{Binding RowActionLabel}" Click="RowToggle_Click" Tag="{Binding}"
-                                                    Padding="8,2" FontSize="10" Margin="0,0,6,0"
+                                                    Padding="8,2" FontSize="11" Margin="0,0,6,0"
                                                    />
                                             <Button Content="Remove" Click="RowRemove_Click" Tag="{Binding}"
-                                                    Padding="8,2" FontSize="10" Foreground="{DynamicResource AccentRedBrush}"
+                                                    Padding="8,2" FontSize="11" Foreground="{DynamicResource AccentRedBrush}"
                                                    />
                                         </StackPanel>
                                     </Grid>
