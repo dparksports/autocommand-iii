@@ -1,4 +1,4 @@
-<Window x:Class="AutoCommand.MainWindow"
+﻿<Window x:Class="AutoCommand.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:AutoCommand.Views"
@@ -37,69 +37,6 @@
                 </TabItem.Header>
                 <views:SvchostMonitorView x:Name="SvchostTab"/>
             </TabItem>
-            <TabItem x:Name="PhoneHomeNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📶" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Phone Home" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:PhoneHomeView x:Name="PhoneHomeTab"/>
-            </TabItem>
-            <TabItem x:Name="SpawnsNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🧬" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Spawns" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:SpawnsView x:Name="SpawnsTab"/>
-            </TabItem>
-            <TabItem x:Name="TracesNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔬" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Traces" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:TracesView x:Name="TracesTab"/>
-            </TabItem>
-            <TabItem x:Name="BitsNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📥" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="BITS Transfers" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:BitsView x:Name="BitsTab"/>
-            </TabItem>
-            <TabItem x:Name="TrafficNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📊" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Traffic Patterns" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:TrafficPatternsView x:Name="TrafficPatternsTab"/>
-            </TabItem>
-            <TabItem x:Name="TransmissionsNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Transmissions" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:TransmissionsView x:Name="TransmissionsTab"/>
-            </TabItem>
-            <TabItem x:Name="SiteDoctorNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🩺" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Site Doctor" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:SiteDoctorView x:Name="SiteDoctorTab"/>
-            </TabItem>
 
             <!-- ═══ CONTAIN ═══ -->
             <TabItem IsEnabled="False" Focusable="False">
@@ -127,24 +64,6 @@
                 </TabItem.Header>
                 <views:BlocksView x:Name="BlocksTab"/>
             </TabItem>
-            <TabItem x:Name="BlackHoleNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🚫" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Black Hole" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:BlackHoleView x:Name="BlackHoleTab"/>
-            </TabItem>
-            <TabItem x:Name="DefenderNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🦠" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Windows Defender" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:DefenderView x:Name="DefenderTab"/>
-            </TabItem>
 
             <!-- ═══ SYSTEM ═══ -->
             <TabItem x:Name="SystemHeaderItem" IsEnabled="False" Focusable="False">
@@ -162,42 +81,6 @@
                     </StackPanel>
                 </TabItem.Header>
                 <views:BeMyGuestView x:Name="BeMyGuestTab"/>
-            </TabItem>
-            <TabItem x:Name="PrivacyNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔐" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Data &amp; Privacy" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:PrivacyView x:Name="PrivacyTab"/>
-            </TabItem>
-            <TabItem x:Name="OneSettingsNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔄" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="OneSettings" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:OneSettingsView x:Name="OneSettingsTab"/>
-            </TabItem>
-            <TabItem x:Name="SysmonNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🧭" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Sysmon Audit" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:SysmonStatusView x:Name="SysmonTab"/>
-            </TabItem>
-            <TabItem x:Name="InvestigateNavItem">
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔬" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Investigate" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </TabItem.Header>
-                <views:InvestigateView x:Name="InvestigateTab"/>
             </TabItem>
             <TabItem>
                 <TabItem.Header>

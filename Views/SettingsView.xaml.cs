@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -67,13 +67,6 @@ namespace AutoCommand.Views
             }
             ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged;
 
-            // Load advanced-investigation preference (detach/attach so the
-            // programmatic set does not fire the save path)
-            AdvancedTabsCheck.Checked -= AdvancedTabsCheck_Checked;
-            AdvancedTabsCheck.Unchecked -= AdvancedTabsCheck_Unchecked;
-            AdvancedTabsCheck.IsChecked = AdvancedTabsPrefs.Load();
-            AdvancedTabsCheck.Checked += AdvancedTabsCheck_Checked;
-            AdvancedTabsCheck.Unchecked += AdvancedTabsCheck_Unchecked;
         }
 
         private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -101,23 +94,6 @@ namespace AutoCommand.Views
         private void AutoMitigateAdaptersCheck_Unchecked(object sender, RoutedEventArgs e)
         {
             SecurityEnforcer.AutoMitigateAdapters = false;
-        }
-
-        // ── Advanced investigation — the eight opt-in deep-dive tabs ────
-
-        private void AdvancedTabsCheck_Checked(object sender, RoutedEventArgs e) => ApplyAdvancedTabs(true);
-
-        private void AdvancedTabsCheck_Unchecked(object sender, RoutedEventArgs e) => ApplyAdvancedTabs(false);
-
-        /// <summary>
-        /// Persists the choice and applies it to the sidebar immediately —
-        /// no restart, the tabs appear/disappear in place.
-        /// </summary>
-        private void ApplyAdvancedTabs(bool enabled)
-        {
-            AdvancedTabsPrefs.Save(enabled);
-            if (Window.GetWindow(this) is MainWindow main)
-                main.ApplyAdvancedTabs(enabled);
         }
 
         private async Task CheckStartupTask()

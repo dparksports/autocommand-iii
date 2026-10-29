@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
@@ -34,10 +34,6 @@ namespace AutoCommand
 
             // Live version from the assembly instead of a hardcoded string
             VersionText.Text = $"AutoCommand v{AppVersion}";
-
-            // Advanced investigation tabs are opt-in (Settings) — apply the
-            // saved state before anything can be selected
-            ApplyAdvancedTabs(Services.AdvancedTabsPrefs.Load());
 
             // Layer-3 crash safety: if a previous run died mid-intercept, the
             // journal on disk still describes the hooks it installed — undo
@@ -103,56 +99,17 @@ namespace AutoCommand
         /// </summary>
         public void ShowTransmissionsToast(string title, string message)
         {
+            // The Transmissions tab was removed from the sidebar (the engine
+            // and its toasts remain) — activating the toast lands on the
+            // Process Monitor instead of selecting a tab that no longer exists.
             _trayNotifier?.ShowSecurityAlert(title, message, durationMs: 10000, onActivated: () =>
-                Dispatcher.Invoke(() => MainTabControl.SelectedItem = TransmissionsNavItem));
+                Dispatcher.Invoke(() => MainTabControl.SelectedItem = ProcessMonitorNavItem));
         }
 
-        // -------------------------------------------------------------------
-        // Advanced investigation tabs — opt-in deep-dive surfaces, hidden
-        // until Settings → Advanced investigation turns them on
-        // -------------------------------------------------------------------
+        // Advanced investigation tabs were removed with the tab strip slimmed
+        // down (their views, the Settings toggle and this machinery went with
+        // them; the engines and AI tools behind them are unchanged).
 
-        /// <summary>True when the tab is one of the opt-in tabs.</summary>
-        private bool IsAdvancedTab(System.Windows.Controls.TabItem t) =>
-            t == SpawnsNavItem || t == BitsNavItem || t == TrafficNavItem ||
-            t == TracesNavItem ||
-            t == BlackHoleNavItem || t == DefenderNavItem ||
-            t == PrivacyNavItem || t == OneSettingsNavItem || t == SysmonNavItem ||
-            t == InvestigateNavItem;
-
-        /// <summary>
-        /// Shows or hides the advanced-investigation tabs. Also called
-        /// by SettingsView when the toggle flips (applies immediately), and
-        /// keeps the group-header tooltips honest about what is currently
-        /// shown. When the tab being viewed is hidden, selection lands back
-        /// on the Process Monitor — an invisible tab must not stay selected.
-        /// </summary>
-        public void ApplyAdvancedTabs(bool enabled)
-        {
-            var v = enabled ? Visibility.Visible : Visibility.Collapsed;
-            SpawnsNavItem.Visibility = v;
-            BitsNavItem.Visibility = v;
-            TrafficNavItem.Visibility = v;
-            TracesNavItem.Visibility = v;
-            BlackHoleNavItem.Visibility = v;
-            DefenderNavItem.Visibility = v;
-            PrivacyNavItem.Visibility = v;
-            OneSettingsNavItem.Visibility = v;
-            SysmonNavItem.Visibility = v;
-            InvestigateNavItem.Visibility = v;
-
-            WatchHeaderText.ToolTip = enabled
-                ? "Feeds that show what this machine is running and where it connects."
-                : "Feeds that show what this machine is running and where it connects.\n" +
-                  "Spawns, Traces, BITS Transfers and Traffic Patterns are hidden — Settings → Advanced investigation shows them.";
-            SystemHeaderText.ToolTip = enabled
-                ? "AI access, privacy, Windows telemetry, Sysmon health, the process Investigate tab and app settings."
-                : "AI access and app settings.\n" +
-                  "Data & Privacy, OneSettings, Sysmon Audit and Investigate are hidden — Settings → Advanced investigation shows them.";
-
-            if (!enabled && IsAdvancedTab(MainTabControl.SelectedItem as System.Windows.Controls.TabItem))
-                MainTabControl.SelectedItem = ProcessMonitorNavItem;
-        }
 
         private void OnThreatDetected(string type, string details)
         {
