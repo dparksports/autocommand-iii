@@ -148,6 +148,29 @@ namespace AutoCommand.Agent.Core
                 a => ListBlocks(a)),
 
             new Tool(
+                "list_gates",
+                "Open block gates — temporary unblocks agents requested and the user approved. Per row: " +
+                "target, remaining minutes, who asked and why. Check this BEFORE requesting a gate " +
+                "(a gate may already be open for your target) and close yours with close_gate when done.",
+                Schema(),
+                false,
+                _ =>
+                {
+                    var rows = new JsonArray();
+                    foreach (var g in BlockGateService.Instance.Open)
+                        rows.Add(new JsonObject
+                        {
+                            ["target"] = g.Display,
+                            ["kind"] = g.Kind,
+                            ["remaining_minutes"] = Math.Round(g.RemainingMinutes, 1),
+                            ["closes_at"] = g.ExpiresUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                            ["client"] = g.Client,
+                            ["reason"] = g.Reason,
+                        });
+                    return ToJson(new JsonObject { ["type"] = "open_gates", ["gates"] = rows.Count, ["rows"] = rows });
+                }),
+
+            new Tool(
                 "list_recent_block_hits",
                 "Processes recently caught hitting AutoCommand firewall blocks, LIVE: Sysmon EID 3 connect " +
                 "attempts joined against the blocked-target inventory — process, pid, blocked destination, " +
@@ -283,6 +306,33 @@ namespace AutoCommand.Agent.Core
                     return $"Removed {n} rule(s).";
                 },
                 a => $"Remove firewall block rules for {a["ip"]}?"),
+
+            new Tool(
+                "open_gate",
+                "Temporarily stop blocking ONE specific blocked IP or process image (all instances of that " +
+                "exe — firewall rules cannot distinguish PIDs). The user confirms the exact target in " +
+                "AutoCommand. The gate AUTO-CLOSES: blocking returns ON after the duration you choose, so " +
+                "pick the SHORTEST window your task needs (allowed: 1, 10, 30, 60 minutes). dry_run=true " +
+                "resolves the target and previews without asking the user — do that first when unsure. " +
+                "Ambiguous names return the candidates instead of acting; be specific. close_gate ends a " +
+                "gate early; list_gates shows what is open.",
+                Schema(("target", "One blocked target: an IP address, a process image name, or a full exe path", true),
+                       ("minutes", "Gate window: 1, 10, 30 or 60 — pick the shortest your task needs", true),
+                       ("reason", "Why — shown to the user in the confirmation", false),
+                       ("dry_run", "true = resolve and preview only, no confirmation, no change", false)),
+                true,
+                a => OpenGate(a),
+                a => OpenGateConfirmText(a)),
+
+            new Tool(
+                "close_gate",
+                "Close an open block gate early: blocking returns ON for that target immediately. " +
+                "Call this the moment your work is done — every minute a gate stays open is a minute " +
+                "its target is unblocked. Asks the user for every call.",
+                Schema(("target", "The gated IP / process name / exe path (as reported by list_gates)", true)),
+                true,
+                a => CloseGate(a),
+                a => $"Close the block gate early - return blocking ON for {a["target"]} now?"),
 
             new Tool(
                 "kill_process",
@@ -701,6 +751,9 @@ namespace AutoCommand.Agent.Core
             var arr = new JsonArray();
             foreach (var t in inv)
             {
+                var gate = BlockGateService.Instance.Find(
+                    t.Kind == "ip" ? "ip" : "proc",
+                    t.Kind == "ip" ? t.Ip : t.AppPath);
                 int h = t.Kind == "ip" && feedHits.TryGetValue(t.Ip, out int c) ? c : 0;
                 string note = string.IsNullOrEmpty(t.Description) ? "" :
                     (t.Description.Length > 160 ? t.Description[..160] + "…" : t.Description);
@@ -716,6 +769,7 @@ namespace AutoCommand.Agent.Core
                     ["stale_rules"] = t.StaleRules,
                     ["created"] = t.Created?.ToString("yyyy-MM-dd HH:mm") ?? "legacy",
                     [$"hits_{minutes}m"] = h,
+                    ["gate_minutes_remaining"] = gate != null ? Math.Round(gate.RemainingMinutes, 1) : null,
                     ["note"] = note,
                 });
             }
@@ -1153,6 +1207,155 @@ namespace AutoCommand.Agent.Core
         }
 
         // ── mutating handlers (already user-confirmed when reached) ───────
+
+        // ── block gates: time-boxed unblocks the user confirmed ──────────
+
+        private sealed record GateResolution(bool Ok, string Kind, string Key, string Display,
+            int Rules, List<string> Candidates, string Error);
+
+        /// <summary>Resolve ONE gate target from the live block inventory.
+        /// IPs match exactly; process targets match a full path exactly or
+        /// an image name — ambiguity returns candidates instead of acting
+        /// ("specific" is the contract, enforced).</summary>
+        private static GateResolution ResolveGateTarget(string target)
+        {
+            target = (target ?? "").Trim();
+            if (target.Length == 0)
+                return new GateResolution(false, null, null, null, 0, null, "target is empty");
+
+            var inv = FirewallService.Instance.GetBlockedInventoryAsync().GetAwaiter().GetResult();
+            if (System.Net.IPAddress.TryParse(target, out var ip))
+            {
+                var m = inv.Where(t => t.Kind == "ip" &&
+                                       string.Equals(t.Ip, ip.ToString(), StringComparison.OrdinalIgnoreCase)).ToList();
+                if (m.Count == 0)
+                    return new GateResolution(false, null, null, null, 0, null,
+                        target + " is not on the blocked list - nothing to gate. See list_blocks.");
+                return new GateResolution(true, "ip", m[0].Ip, m[0].Ip, m[0].Rules, null, null);
+            }
+
+            var apps = inv.Where(t => t.Kind == "app" && !string.IsNullOrEmpty(t.AppPath)).ToList();
+            var exact = apps.Where(t => string.Equals(t.AppPath, target, StringComparison.OrdinalIgnoreCase)).ToList();
+            var byName = apps.Where(t => string.Equals(System.IO.Path.GetFileName(t.AppPath), target,
+                                                       StringComparison.OrdinalIgnoreCase)).ToList();
+            var chosen = exact.Count > 0 ? exact : byName;
+            if (chosen.Count == 0)
+                return new GateResolution(false, null, null, null, 0, null,
+                    "No blocked process matches '" + target + "'. Call list_blocks to see targets; " +
+                    "use the full path when several share a name.");
+            if (chosen.Count > 1)
+                return new GateResolution(false, null, null, null, 0,
+                    chosen.Take(8).Select(t => t.AppPath).ToList(),
+                    "'" + target + "' matches " + chosen.Count + " blocked processes - be specific (full path).");
+            return new GateResolution(true, "proc", chosen[0].AppPath, chosen[0].Target, chosen[0].Rules, null, null);
+        }
+
+        private static bool TryMinutes(JsonObject a, out int minutes, out string error)
+        {
+            minutes = 0;
+            error = null;
+            if (!int.TryParse(a["minutes"]?.ToString(), out minutes) ||
+                !BlockGateService.AllowedMinutes.Contains(minutes))
+            {
+                error = "minutes must be one of [" + string.Join(", ", BlockGateService.AllowedMinutes) +
+                        "] - pick the SHORTEST window your task needs; the gate closes itself.";
+                return false;
+            }
+            return true;
+        }
+
+        private static string OpenGate(JsonObject a)
+        {
+            var target = a["target"]?.GetValue<string>();
+            if (!TryMinutes(a, out int minutes, out string mErr))
+                return ToJson(new JsonObject { ["error"] = mErr });
+            string reason = a["reason"]?.GetValue<string>();
+            bool dryRun = string.Equals(a["dry_run"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+
+            var r = ResolveGateTarget(target);
+            if (!r.Ok)
+                return ToJson(new JsonObject { ["error"] = r.Error, ["candidates"] = ToJsonArray(r.Candidates) });
+
+            var existing = BlockGateService.Instance.Find(r.Kind, r.Key);
+            if (dryRun)
+                return ToJson(new JsonObject
+                {
+                    ["target"] = r.Display,
+                    ["kind"] = r.Kind,
+                    ["rules_currently_enabled"] = r.Rules,
+                    ["minutes"] = minutes,
+                    ["would_close_at"] = DateTime.UtcNow.AddMinutes(minutes).ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                    ["gate_open_now"] = existing != null,
+                    ["remaining_minutes"] = existing != null ? Math.Round(existing.RemainingMinutes, 1) : null,
+                    ["note"] = "No change made. A real call asks the user to confirm this exact target.",
+                });
+
+            // post-confirmation: persist the gate FIRST, then stop blocking
+            var gate = BlockGateService.Instance.OpenGate(r.Kind, r.Key, r.Display, minutes, "mcp", reason);
+            var targets = new[] { (r.Kind, r.Key) };
+            var (matched, changed) = FirewallService.Instance.SetTargetsEnabledAsync(targets, false).GetAwaiter().GetResult();
+            BlocksStore.SetStatuses(targets, "off", "mcp");
+            return ToJson(new JsonObject
+            {
+                ["gate_open"] = true,
+                ["target"] = r.Display,
+                ["minutes"] = minutes,
+                ["closes_at"] = gate.ExpiresUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                ["rules_disabled"] = changed + "/" + matched,
+                ["note"] = "Traffic resumes now; blocking returns ON automatically at closes_at " +
+                           "(or app exit). Call close_gate the moment your work is done.",
+            });
+        }
+
+        private static string OpenGateConfirmText(JsonObject a)
+        {
+            if (!TryMinutes(a, out int minutes, out string mErr))
+                return "GATE REQUEST - invalid as asked.\n" + mErr;
+            var r = ResolveGateTarget(a["target"]?.GetValue<string>());
+            if (!r.Ok)
+                return "GATE REQUEST - cannot be fulfilled as asked:\n" + r.Error;
+            var existing = BlockGateService.Instance.Find(r.Kind, r.Key);
+            string reason = a["reason"]?.GetValue<string>();
+            return "Open a " + minutes + "-minute block gate?\n\n" +
+                   "Target: " + r.Display + "  (" + r.Kind + ", " + r.Rules + " rule(s) - blocking OFF for this target only)\n" +
+                   (existing != null
+                       ? "A gate is already open (" + Math.Round(existing.RemainingMinutes) + " min left) - this EXTENDS it.\n"
+                       : "") +
+                   "Auto-close: blocking returns ON at " +
+                   DateTime.UtcNow.AddMinutes(minutes).ToLocalTime().ToString("HH:mm") + " (or when the app exits).\n" +
+                   (string.IsNullOrEmpty(reason) ? "" : "Reason given: " + reason + "\n") +
+                   "\nTraffic resumes immediately. Nothing is deleted; the gate closes itself.";
+        }
+
+        private static string CloseGate(JsonObject a)
+        {
+            var r = ResolveGateTarget(a["target"]?.GetValue<string>());
+            if (!r.Ok)
+                return ToJson(new JsonObject { ["error"] = r.Error, ["candidates"] = ToJsonArray(r.Candidates) });
+            var existing = BlockGateService.Instance.Find(r.Kind, r.Key);
+            if (existing == null)
+                return ToJson(new JsonObject
+                {
+                    ["gate_open"] = false,
+                    ["note"] = "No gate is open for that target - blocking was already restored (or never gated).",
+                });
+            BlockGateService.Instance.CloseAsync(r.Kind, r.Key, "mcp").GetAwaiter().GetResult();
+            return ToJson(new JsonObject
+            {
+                ["gate_open"] = false,
+                ["target"] = r.Display,
+                ["note"] = "Gate closed early - blocking is back ON for this target.",
+            });
+        }
+
+        private static JsonArray ToJsonArray(List<string> items)
+        {
+            if (items == null) return null;
+            var arr = new JsonArray();
+            foreach (var i in items) arr.Add(i);
+            return arr;
+        }
+
 
         private static async Task<string> BlockIp(JsonObject a)
         {

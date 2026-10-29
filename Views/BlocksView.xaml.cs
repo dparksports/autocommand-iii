@@ -288,6 +288,15 @@ namespace AutoCommand.Views
                         LastTrafficBrush = (Brush)FindResource("BlocksMutedBrush"),
                     };
                     vm.CanSelect = vm.HasRules && !vm.RulesEnabled;
+                    var gate = AutoCommand.Agent.Core.BlockGateService.Instance.Find(r.Kind, r.Key);
+                    if (gate != null)
+                    {
+                        vm.PausedShort = $"gate {gate.RemainingMinutes:0}m · {gate.Client}";
+                        vm.PausedInfoToolTip =
+                            $"Block gate opened {gate.OpenedUtc.ToLocalTime():HH:mm} by {gate.Client}" +
+                            (string.IsNullOrEmpty(gate.Reason) ? "" : $" — {gate.Reason}") +
+$"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}.";
+                    }
                     if (vm.CanSelect)
                     {
                         string hk = r.Kind + ":" + r.Key;
@@ -502,6 +511,9 @@ namespace AutoCommand.Views
             "migration" => "import",
             "repair" => "attribution repair",
             "undo" => "undo",
+            "mcp" => "MCP",
+            "gate-expiry" => "gate auto-close",
+            "gate-exit" => "gate exit",
             "" or null => "unknown surface",
             _ => origin,
         };

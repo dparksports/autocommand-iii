@@ -186,6 +186,22 @@ namespace AutoCommand
                 },
             });
 
+            // Block gates: close anything that expired while the app was
+            // down, then keep watch — an open gate is a promise to re-block
+            _ = Agent.Core.BlockGateService.Instance.ReconcileOnStartupAsync();
+            InstrumentMetronome.Instance.Register(new InstrumentSpec
+            {
+                Id = "gate-watch",
+                Name = "Block gate watch",
+                Description = "Closes expired block gates - temporary agent-requested unblocks whose " +
+                              "time window ended - restoring blocking automatically.",
+                Cost = InstrumentCost.Light,
+                DefaultSeconds = 10,
+                MinSeconds = 5,
+                MaxSeconds = 60,
+                Callback = () => Agent.Core.BlockGateService.Instance.CloseExpiredAsync(),
+            });
+
             SinkholeService.Instance.EnsureRunningForCurrentPins();
             _ = Services.TelemetryProofService.Instance.TotalDenied;
 
@@ -298,6 +314,7 @@ namespace AutoCommand
             // a live session must never outlive the app: the session file is
             // what grants access, so it dies here even on a crash-next-launch
             AgentBridgeService.Instance.Stop();
+            Agent.Core.BlockGateService.Instance.CloseAllAsync("gate-exit").GetAwaiter().GetResult();
             BufferedAppender.FlushAll();
             BlocksStore.FlushPending();
             InstrumentMetronome.Instance.Stop();
