@@ -10,67 +10,9 @@ namespace AutoCommand.Models
     // (ScheduledTaskItem.cs) with the phase 4 extraction — TaskSchedulerService
     // builds these rows and lives in the core now.
 
-    public class NetworkAdapterItem
-    {
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public string Status { get; set; }
-        public string MacAddress { get; set; }
-        public string InterfaceType { get; set; }
-        public string DeviceID { get; set; }
-    }
-
     // FirewallRuleItem moved to core\AutoCommand.Contain.Core
     // (FirewallRuleItem.cs) with the phase 3 extraction — FirewallService
     // builds these rows and lives in the core now.
-
-    public class EfiFileResult
-    {
-        public string Status { get; set; }
-        public string Path { get; set; }
-        public System.Windows.Media.Brush StatusColor { get; set; }
-    }
-
-    public class NetworkConnectionItem : System.ComponentModel.INotifyPropertyChanged, IResolvableHost
-    {
-        public string Protocol { get; set; }
-        public string LocalAddress { get; set; }
-        public string RemoteAddress { get; set; }
-        public string State { get; set; }
-        public int ProcessId { get; set; }
-        public string ProcessName { get; set; }
-
-        public string RemoteIp => RemoteAddress;
-
-        public string Hostname
-        {
-            get => RemoteHost;
-            set => RemoteHost = value;
-        }
-
-        private string _remoteHost;
-        public string RemoteHost
-        {
-            get => _remoteHost;
-            set
-            {
-                if (_remoteHost != value)
-                {
-                    _remoteHost = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(IsResolved));
-                }
-            }
-        }
-
-        public bool IsResolved => !string.IsNullOrEmpty(_remoteHost) && _remoteHost != RemoteAddress && _remoteHost != "0.0.0.0" && _remoteHost != "::";
-
-        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string name = null)
-        {
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
-        }
-    }
 
     public class StartupItem
     {

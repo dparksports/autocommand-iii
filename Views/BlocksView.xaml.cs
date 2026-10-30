@@ -160,6 +160,11 @@ namespace AutoCommand.Views
     {
         private enum BlockFilter { All, Active, Paused, Partial, HighImpact, Unattributed, MsInfra }
 
+        /// <summary>User-chosen row order for the detail pane. Default is
+        /// the shipped order (IPs first, then apps, each by key) — every
+        /// other value is a column header the user clicked.</summary>
+        private enum BlockSortColumn { Default, Target, Service, Class, Created, LastTraffic, Containment, Status }
+
         private sealed class FilterChip
         {
             public readonly BlockFilter Mode;
@@ -193,6 +198,13 @@ namespace AutoCommand.Views
         private readonly HashSet<string> _selectedKeys = new(StringComparer.OrdinalIgnoreCase);
         private bool _syncingSelection;
 
+        // Column sort: which header the user clicked and which way it
+        // points. Default preserves the shipped IP-first order everywhere;
+        // the choice survives restarts (blocks-sort.txt beside the store).
+        private BlockSortColumn _sortColumn = BlockSortColumn.Default;
+        private bool _sortDescending;
+        private Dictionary<BlockSortColumn, (Button btn, string label)> _sortHeaders;
+
         // Post-action undo
         private DispatcherTimer _toastTimer;
         private List<(string kind, string key, bool wasEnabled)> _undoSnapshot;
@@ -202,6 +214,18 @@ namespace AutoCommand.Views
             InitializeComponent();
             _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
             _toastTimer.Tick += (s, a) => HideToast();
+            _sortHeaders = new Dictionary<BlockSortColumn, (Button, string)>
+            {
+                [BlockSortColumn.Status]      = (HdrStatus, "⛔"),
+                [BlockSortColumn.Target]      = (HdrTarget, "Target"),
+                [BlockSortColumn.Service]     = (HdrService, "Service"),
+                [BlockSortColumn.Class]       = (HdrClass, "Class"),
+                [BlockSortColumn.Created]     = (HdrCreated, "Created"),
+                [BlockSortColumn.LastTraffic] = (HdrTraffic, "Last attempt"),
+                [BlockSortColumn.Containment] = (HdrContainment, "Containment"),
+            };
+            LoadSortPref();
+            UpdateSortHeaderGlyphs();
             IsVisibleChanged += (s, e) => { if (IsVisible) { _ = ReloadAsync(); MaybeShowAuditDigest(); } };
             Loaded += (s, e) => _ = ReloadAsync();
         }
@@ -837,12 +861,13 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                     r.Record.Key.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                     r.ServiceDisplay.Contains(q, StringComparison.OrdinalIgnoreCase));
             }
-            DetailRows.ItemsSource = rows.ToList();
+            DetailRows.ItemsSource = ApplyUserSort(rows.ToList());
         }
 
         /// <summary>Every row, in category order — the "All blocks" detail
         /// keeps the master list's grouping visually via the Service
-        /// column's order.</summary>
+        /// column's order (until the user picks a column sort, which
+        /// reorders globally; ties keep this order via stable sort).</summary>
         private List<BlockRowVm> OrderAllRows()
         {
             var order = new Dictionary<BlockRowVm, int>();
@@ -852,6 +877,166 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
             return _allRows
                 .OrderBy(r => order.TryGetValue(r, out var idx) ? idx : int.MaxValue)
                 .ToList();
+        }
+
+        // ── column sort (user-chosen row order) ────────────────────────────
+
+        /// <summary>The user's column sort, applied where rows reach the UI
+        /// (after lens and search filtering, which compose freely under it).
+        /// Keys are typed per column — IPs numerically, times chronologically,
+        /// containment by severity — so "4.209.x" no longer sorts before
+        /// "10.x", and "no traffic found" sinks to the bottom in both
+        /// directions. Default keeps the caller's shipped order.</summary>
+        private List<BlockRowVm> ApplyUserSort(List<BlockRowVm> rows)
+        {
+            switch (_sortColumn)
+            {
+                case BlockSortColumn.Target:
+                    return _sortDescending
+                        ? rows.OrderByDescending(TargetSortKey)
+                              .ThenByDescending(v => v.Target, StringComparer.OrdinalIgnoreCase).ToList()
+                        : rows.OrderBy(TargetSortKey)
+                              .ThenBy(v => v.Target, StringComparer.OrdinalIgnoreCase).ToList();
+                case BlockSortColumn.Service:
+                    return _sortDescending
+                        ? rows.OrderByDescending(v => v.ServiceDisplay, StringComparer.OrdinalIgnoreCase).ToList()
+                        : rows.OrderBy(v => v.ServiceDisplay, StringComparer.OrdinalIgnoreCase).ToList();
+                case BlockSortColumn.Class:
+                    return _sortDescending
+                        ? rows.OrderByDescending(v => v.Record.ClassAtBlock ?? "", StringComparer.OrdinalIgnoreCase).ToList()
+                        : rows.OrderBy(v => v.Record.ClassAtBlock ?? "", StringComparer.OrdinalIgnoreCase).ToList();
+                case BlockSortColumn.Created:
+                    return _sortDescending
+                        ? rows.OrderByDescending(v => v.Record.CreatedUtc).ToList()
+                        : rows.OrderBy(v => v.Record.CreatedUtc).ToList();
+                case BlockSortColumn.LastTraffic:   // nulls sink, both ways
+                    return _sortDescending
+                        ? rows.OrderBy(v => v.LastTrafficUtc == null ? 1 : 0)
+                              .ThenByDescending(v => v.LastTrafficUtc ?? DateTime.MinValue).ToList()
+                        : rows.OrderBy(v => v.LastTrafficUtc == null ? 1 : 0)
+                              .ThenBy(v => v.LastTrafficUtc ?? DateTime.MinValue).ToList();
+                case BlockSortColumn.Containment:
+                    return _sortDescending
+                        ? rows.OrderByDescending(ContainmentSortRank).ToList()
+                        : rows.OrderBy(ContainmentSortRank).ToList();
+                case BlockSortColumn.Status:
+                    return _sortDescending
+                        ? rows.OrderByDescending(StatusSortRank).ToList()
+                        : rows.OrderBy(StatusSortRank).ToList();
+                default:
+                    return rows;
+            }
+        }
+
+        /// <summary>IPs sort by address value (10.x.x.x before 4.x.x.x — the
+        /// string sort had them backwards), apps after all IPs by name. IPv6
+        /// and anything unparseable keep string order at the IP tier's end.</summary>
+        private static (int tier, uint ip) TargetSortKey(BlockRowVm v)
+        {
+            if (!v.Record.IsIp) return (1, 0);
+            try
+            {
+                byte[] b = System.Net.IPAddress.Parse(v.Record.Key).GetAddressBytes();
+                return b.Length == 4 ? (0, (uint)(b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3])) : (0, uint.MaxValue);
+            }
+            catch { return (0, uint.MaxValue); }
+        }
+
+        /// <summary>Severity order for the containment column: leak worst,
+        /// then stale flow, contained, quiet; paused / no-rules / unknown
+        /// ("…", "—") sink last.</summary>
+        private static int ContainmentSortRank(BlockRowVm v) => v.ContainmentVerdict switch
+        {
+            BlockContainmentVerifier.Leak => 0,
+            BlockContainmentVerifier.StaleFlow => 1,
+            BlockContainmentVerifier.Contained => 2,
+            "quiet" => 3,
+            _ => 4,
+        };
+
+        /// <summary>Blocking-state order for the status column: ON, partial,
+        /// OFF, stale, no rules at all.</summary>
+        private static int StatusSortRank(BlockRowVm v) => !v.HasRules ? 4
+            : v.RulesStale ? 3
+            : !v.RulesEnabled ? 2
+            : v.EnabledCount < v.RulesCount ? 1 : 0;
+
+        private void SortHeader_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.Tag is not string name ||
+                !Enum.TryParse(name, ignoreCase: true, out BlockSortColumn col) ||
+                col == BlockSortColumn.Default)
+                return;
+
+            if (col == _sortColumn)
+            {
+                // natural → reversed → back to the shipped default
+                if (_sortDescending) { _sortColumn = BlockSortColumn.Default; _sortDescending = false; }
+                else _sortDescending = true;
+            }
+            else
+            {
+                _sortColumn = col;
+                _sortDescending = NaturalDirection(col);
+            }
+            UpdateSortHeaderGlyphs();
+            SaveSortPref();
+            RenderDetail();
+        }
+
+        /// <summary>The direction a first click means: dates and severity
+        /// read backwards (newest / worst first), names read forwards.</summary>
+        private static bool NaturalDirection(BlockSortColumn col) => col switch
+        {
+            BlockSortColumn.Created or BlockSortColumn.LastTraffic or BlockSortColumn.Containment => true,
+            _ => false,
+        };
+
+        /// <summary>Header labels carry ▲/▼ on the active column; the 20px
+        /// status header signals by brightening alone (no room for an
+        /// arrow). Default order = no glyphs anywhere.</summary>
+        private void UpdateSortHeaderGlyphs()
+        {
+            foreach (var (col, (btn, label)) in _sortHeaders)
+            {
+                bool active = col == _sortColumn;
+                bool arrow = active && col != BlockSortColumn.Status;
+                btn.Content = !arrow ? label : label + (_sortDescending ? " ▼" : " ▲");
+                btn.Style = (Style)FindResource(active ? "SortHeaderBtnActive" : "SortHeaderBtn");
+            }
+        }
+
+        // The sort choice persists as one line beside the store ("traffic
+        // desc"), the same best-effort marker convention as audit-seen.txt;
+        // unreadable or absent falls back to the shipped order.
+        private string SortPrefPath => Path.Combine(
+            Path.GetDirectoryName(BlocksStore.EventLogPath) ?? ".", "blocks-sort.txt");
+
+        private void LoadSortPref()
+        {
+            try
+            {
+                if (!File.Exists(SortPrefPath)) return;
+                string[] parts = File.ReadAllText(SortPrefPath).Trim().Split(' ');
+                if (parts.Length == 0 ||
+                    !Enum.TryParse(parts[0], ignoreCase: true, out BlockSortColumn col) ||
+                    col == BlockSortColumn.Default) return;
+                _sortColumn = col;
+                _sortDescending = parts.Length > 1 && parts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { /* unreadable pref = default order */ }
+        }
+
+        private void SaveSortPref()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SortPrefPath) ?? ".");
+                File.WriteAllText(SortPrefPath, _sortColumn == BlockSortColumn.Default
+                    ? "default"
+                    : _sortColumn.ToString().ToLowerInvariant() + (_sortDescending ? " desc" : ""));
+            }
+            catch { /* best-effort */ }
         }
 
         private string LensDescription() => _filter switch

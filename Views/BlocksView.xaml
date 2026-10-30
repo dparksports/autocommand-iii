@@ -8,7 +8,53 @@
              TextSecondaryBrush (#98A2B3, ~6:1) reads as dim at 10-11 px on
              this dense screen, so the Blocks tab carries its own brighter
              gray while keeping TextPrimary for the hierarchy above it. -->
-        
+
+        <!-- Detail-pane column widths: one definition shared by the sort
+             header row and the row template, so the two can never drift. -->
+        <GridLength x:Key="ColBasket">22</GridLength>
+        <GridLength x:Key="ColStatus">20</GridLength>
+        <GridLength x:Key="ColTarget">170</GridLength>
+        <GridLength x:Key="ColService">190</GridLength>
+        <GridLength x:Key="ColClass">140</GridLength>
+        <GridLength x:Key="ColCreated">100</GridLength>
+        <GridLength x:Key="ColTraffic">160</GridLength>
+        <GridLength x:Key="ColContainment">130</GridLength>
+        <GridLength x:Key="ColActions">*</GridLength>
+
+        <!-- Flat header cell for the user-sortable columns: quiet by
+             default, brightens on hover, no chrome beyond that. -->
+        <Style x:Key="SortHeaderBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,2"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The active sort column: brighter and bolder than its idle
+             siblings, swapped in from code. Style (not a local value) so
+             the hover trigger keeps working. -->
+        <Style x:Key="SortHeaderBtnActive" TargetType="Button" BasedOn="{StaticResource SortHeaderBtn}">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="16,12,16,8">
@@ -250,6 +296,47 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                <!-- Sort header: every labelled column sorts. Click cycles
+                     natural order → reversed → back to the shipped default
+                     (IP-first). The active column brightens and carries an
+                     arrow; the 20px status column signals by color alone. -->
+                <Grid x:Name="SortHeaderGrid" DockPanel.Dock="Top" Margin="0,0,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource ColBasket}"/>
+                        <ColumnDefinition Width="{StaticResource ColStatus}"/>
+                        <ColumnDefinition Width="{StaticResource ColTarget}"/>
+                        <ColumnDefinition Width="{StaticResource ColService}"/>
+                        <ColumnDefinition Width="{StaticResource ColClass}"/>
+                        <ColumnDefinition Width="{StaticResource ColCreated}"/>
+                        <ColumnDefinition Width="{StaticResource ColTraffic}"/>
+                        <ColumnDefinition Width="{StaticResource ColContainment}"/>
+                        <ColumnDefinition Width="{StaticResource ColActions}"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0"/>
+                    <Button Grid.Column="1" x:Name="HdrStatus" Style="{StaticResource SortHeaderBtn}" Tag="status"
+                            Click="SortHeader_Click" Content="⛔" Padding="0"
+                            HorizontalContentAlignment="Center"
+                            ToolTip="Sort by blocking state — ON, partial, OFF, stale, no rules. Click again to reverse, a third time for the shipped order."/>
+                    <Button Grid.Column="2" x:Name="HdrTarget" Style="{StaticResource SortHeaderBtn}" Tag="target"
+                            Click="SortHeader_Click" Content="Target"
+                            ToolTip="Sort by target — IPs numerically (10.x after 4.x), then app names A→Z. Click again to reverse, a third time for the shipped order."/>
+                    <Button Grid.Column="3" x:Name="HdrService" Style="{StaticResource SortHeaderBtn}" Tag="service"
+                            Click="SortHeader_Click" Content="Service"
+                            ToolTip="Sort by the service that made the connection. Click again to reverse, a third time for the shipped order."/>
+                    <Button Grid.Column="4" x:Name="HdrClass" Style="{StaticResource SortHeaderBtn}" Tag="class"
+                            Click="SortHeader_Click" Content="Class"
+                            ToolTip="Sort by ownership class captured at block time. Click again to reverse, a third time for the shipped order."/>
+                    <Button Grid.Column="5" x:Name="HdrCreated" Style="{StaticResource SortHeaderBtn}" Tag="created"
+                            Click="SortHeader_Click" Content="Created"
+                            ToolTip="Sort by when the block was created — newest first. Click again for oldest first, a third time for the shipped order."/>
+                    <Button Grid.Column="6" x:Name="HdrTraffic" Style="{StaticResource SortHeaderBtn}" Tag="traffic"
+                            Click="SortHeader_Click" Content="Last attempt"
+                            ToolTip="Sort by last connection attempt — freshest first ('no traffic found' sinks to the bottom either way). Click again for oldest first, a third time for the shipped order."/>
+                    <Button Grid.Column="7" x:Name="HdrContainment" Style="{StaticResource SortHeaderBtn}" Tag="containment"
+                            Click="SortHeader_Click" Content="Containment"
+                            ToolTip="Sort by containment verdict — LEAK first, then stale flow, contained, quiet. Click again to reverse, a third time for the shipped order."/>
+                    <Grid Grid.Column="8"/>
+                </Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="DetailRows">
                         <ItemsControl.ItemTemplate>
@@ -257,15 +344,16 @@
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="22"/>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="170"/>
-                                            <ColumnDefinition Width="190"/>
-                                            <ColumnDefinition Width="140"/>
-                                            <ColumnDefinition Width="100"/>
-                                            <ColumnDefinition Width="160"/>
-                                            <ColumnDefinition Width="130"/>
-                                            <ColumnDefinition Width="*"/>
+                                            <!-- Same shared widths as the sort header row above. -->
+                                            <ColumnDefinition Width="{StaticResource ColBasket}"/>
+                                            <ColumnDefinition Width="{StaticResource ColStatus}"/>
+                                            <ColumnDefinition Width="{StaticResource ColTarget}"/>
+                                            <ColumnDefinition Width="{StaticResource ColService}"/>
+                                            <ColumnDefinition Width="{StaticResource ColClass}"/>
+                                            <ColumnDefinition Width="{StaticResource ColCreated}"/>
+                                            <ColumnDefinition Width="{StaticResource ColTraffic}"/>
+                                            <ColumnDefinition Width="{StaticResource ColContainment}"/>
+                                            <ColumnDefinition Width="{StaticResource ColActions}"/>
                                         </Grid.ColumnDefinitions>
                                         <!-- Basket checkbox appears ONLY where it can act
                                              (blocking OFF) — no dead grey checkers. -->

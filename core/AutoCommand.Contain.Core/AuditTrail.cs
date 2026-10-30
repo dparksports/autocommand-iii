@@ -26,19 +26,24 @@ namespace AutoCommand.Contain.Core
     /// </summary>
     public class AuditIncident
     {
-        public string Category;    // auto | pause | fleet | external
-        public string Severity;    // routine | info | resolved | attention
-        public string Sentence = "";   // one line, plain language, past tense
-        public string Meta = "";       // time range · actor · counts
-        public string DayHeader = "";  // TODAY · FRIDAY, OCT 30 (local)
+        // Everything the Audit tab's XAML binds MUST be a property, not a
+        // field — WPF {Binding} silently produces nothing on fields (the
+        // 49-instance BlocksView bug class; this class shipped with it and
+        // rendered blank rows before the fix). Members only touched from
+        // code (StartUtc/EndUtc/Count/Events/KindCounts) can stay fields.
+        public string Category { get; set; }        // auto | pause | fleet | external
+        public string Severity { get; set; }        // routine | info | resolved | attention
+        public string Sentence { get; set; } = "";  // one line, plain language, past tense
+        public string Meta { get; set; } = "";      // time range · actor · counts
+        public string DayHeader { get; set; } = ""; // TODAY · FRIDAY, OCT 30 (local)
         public DateTime StartUtc;
         public DateTime EndUtc;
         public int Count;              // targets/events the incident covers
-        public List<string> EventLines = new();   // "3:47 PM  raw line"
+        public List<string> EventLines { get; } = new();   // "3:47 PM  raw line"
 
         // Grouping state (what the events in this incident share).
-        public string EventsAction = "";
-        public string EventsOrigin = "";
+        public string EventsAction { get; set; } = "";
+        public string EventsOrigin { get; set; } = "";
         public readonly List<AuditEvent> Events = new();
         public readonly Dictionary<string, int> KindCounts = new(StringComparer.OrdinalIgnoreCase);
     }

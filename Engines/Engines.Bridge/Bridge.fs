@@ -570,14 +570,29 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
 
     /// <summary>What a "for this session" grant actually covers. Gate tools
     /// grant PER TARGET — "allow gates for this address/host" never widens
-    /// to other blocked services; every new target asks again. Other tools
-    /// (none today beyond the gate pair) would grant per tool.</summary>
+    /// to other blocked services; every new target asks again. Other
+    /// mutating tools grant per-target too when their args carry an
+    /// obvious target (ip / pid / task_path — AutoScope's block_ip,
+    /// unblock_ip, kill_process, disable_task run on this shared engine):
+    /// "always allow kill_process" must never widen to every process for
+    /// the rest of the session. Tools with no target-shaped argument fall
+    /// back to per-tool.</summary>
     static member private GrantKey (toolName: string, args: JsonObject) : string =
         if toolName = "open_gate" || toolName = "close_gate" then
             match args["target"] with
             | null -> toolName
             | t -> toolName + "|" + t.ToString().Trim().ToLowerInvariant()
-        else toolName
+        else
+            // per-target when the tool's scope is a specific object
+            let scoped =
+                [ "ip"; "pid"; "task_path" ]
+                |> List.tryPick (fun k ->
+                    match args[k] with
+                    | null -> None
+                    | v -> Some (v.ToString().Trim().ToLowerInvariant()))
+            match scoped with
+            | Some t -> toolName + "|" + t
+            | None -> toolName
 
     // ── per-action confirmation (Tier 3) ──────────────────────────────
 
