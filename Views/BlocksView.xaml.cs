@@ -1047,7 +1047,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
             BlockFilter.HighImpact => "Lens: only categories Windows depends on (security features, sign-in, updates).",
             BlockFilter.Unattributed => "Lens: blocks whose service identity is still unresolved — 'Repair attribution' may recover it.",
             BlockFilter.MsInfra => "Lens: blocks on Microsoft/Azure, Akamai or Gcore infrastructure.",
-            _ => "Every firewall block this app created. Pick a category on the left for its detail; the search box finds categories and targets.",
+            _ => "Every firewall block this app created. Pick a category on the right for its detail; the search box finds categories and targets.",
         };
 
         // ── basket (restore selection) ─────────────────────────────────────

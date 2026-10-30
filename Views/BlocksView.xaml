@@ -80,7 +80,7 @@
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="⛔ Blocks" FontSize="20" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <TextBlock Text="Every firewall block this app created — categories on the left, the selected category's blocks on the right, grouped by the Windows service that actually made the connection."
+                <TextBlock Text="Every firewall block this app created — the selected category's blocks on the left, categories to pick from on the right, grouped by the Windows service that actually made the connection."
                            FontSize="11" Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,0,0"/>
                 <TextBlock x:Name="StatusText" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,0,0"/>
             </StackPanel>
@@ -169,19 +169,20 @@
             </StackPanel>
         </Border>
 
-        <!-- Master–detail: every category at once on the left, the selected
-             category's blocks on the right. Selection replaces the old
+        <!-- Master–detail: every category at once on the right, the selected
+             category's blocks on the left. Selection replaces the old
              expand/collapse accordions. -->
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="220"/>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="320" MinWidth="220"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Master: the category list -->
-            <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                    CornerRadius="4" Margin="0,0,0,0">
+            <!-- Master: the category list (right side — selection drives the
+                 pane on the left) -->
+            <Border Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="4" Margin="10,0,0,0">
                 <DockPanel>
                     <TextBox x:Name="SearchBox" DockPanel.Dock="Top" Margin="8,8,8,6" FontSize="12"
                              Background="{DynamicResource BackgroundBrush}"
@@ -271,8 +272,8 @@
                           VerticalAlignment="Stretch" Background="Transparent"
                           ShowsPreview="False" ResizeBehavior="PreviousAndNext"/>
 
-            <!-- Detail: the selected category -->
-            <DockPanel Grid.Column="2" Margin="10,0,0,0">
+            <!-- Detail: the selected category (left side) -->
+            <DockPanel Grid.Column="0" Margin="0,0,10,0">
                 <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="0,0,0,8"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                     <StackPanel>
