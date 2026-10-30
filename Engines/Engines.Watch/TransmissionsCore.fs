@@ -29,6 +29,8 @@
 
 namespace AutoCommand.Engines.Watch
 
+open AutoCommand.Engines.Core
+
 open System
 open System.Collections.Generic
 open System.IO
@@ -731,7 +733,7 @@ type TlsKeylogService(dirArg: string) =
     static member DisableKeylogging() =
         try
             Directory.CreateDirectory TlsKeylogService.Dir |> ignore
-            File.WriteAllText(TlsKeylogService.NoKeylogFlagPath, "TLS keylogging disabled from AutoCommand settings")
+            File.WriteAllText(TlsKeylogService.NoKeylogFlagPath, $"TLS keylogging disabled from {Branding.DisplayName} settings")
             File.Delete TlsKeylogService.KeylogPath
         with ex ->
             raise (InvalidOperationException($"Could not disable keylogging: {ex.Message}", ex))
@@ -935,7 +937,7 @@ type TlsKeylogStore(dirArg: string) =
     member this.DisableKeylogging() : unit =
         try
             Directory.CreateDirectory this.Dir |> ignore
-            File.WriteAllText(this.NoKeylogFlagPath, "TLS keylogging disabled from AutoCommand settings")
+            File.WriteAllText(this.NoKeylogFlagPath, $"TLS keylogging disabled from {Branding.DisplayName} settings")
             File.Delete this.KeylogPath
         with ex ->
             raise (InvalidOperationException($"Could not disable keylogging: {ex.Message}", ex))

@@ -13,6 +13,10 @@ type WatchConfig private () =
     static member Configure(id: AppIdentity) =
         identity <- id
         configured <- true
+        // One call configures the whole engine family: the brand the
+        // engines' own user-facing strings use (verdicts, keylog flag,
+        // provenance footer, RDAP User-Agent) comes from the identity too.
+        Branding.Configure id.Name
     static member Identity =
         if not configured then failwith "WatchConfig.Configure(identity) must be called at app startup"
         identity

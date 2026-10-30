@@ -194,7 +194,7 @@ type SiteVerdict private () =
                   $"{addrDetail}{served}. AutoCommand's own firewall rules dropped them silently — " +
                   "when a page's dependency is blocked, the page fails oddly (sign-ins show generic errors) " +
                   "while the site itself keeps working.",
-                  "Unblock with the button below, then retry what failed — only AutoCommand's own rules are " +
+                  $"Unblock with the button below, then retry what failed — only {Branding.DisplayName}'s own rules are " +
                   "removed, fully reversible from the Blocks tab. If a rule was there for a reason, re-block " +
                   "it there and the diagnosis stands as the explanation.")
 

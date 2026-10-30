@@ -20,6 +20,20 @@ type AppIdentity =
       /// MCP server id written into client configs
       McpId: string }
 
+/// <summary>
+/// The user-visible brand of the host app, for the handful of strings the
+/// engines themselves author (verdict next-steps, the keylog flag-file
+/// text, the provenance report footer, the RDAP User-Agent). Set once at
+/// startup — WatchConfig.Configure does it from the identity's Name — and
+/// read-only everywhere else. Neutral default so engines stay honest when
+/// no host configured them (self-tests).
+/// </summary>
+module Branding =
+    let mutable private displayName = "the app"
+    let Configure(name: string) : unit =
+        if not (System.String.IsNullOrWhiteSpace name) then displayName <- name
+    let DisplayName: string = displayName
+
 module Identity =
     /// AutoCommand III's identity: the autocommand-ii values (port base
     /// 47821, %LOCALAPPDATA%\AutoCommand, AC-BLOCK rule names, the

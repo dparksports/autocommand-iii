@@ -35,6 +35,8 @@
 
 namespace AutoCommand.Engines.Watch
 
+open AutoCommand.Engines.Core
+
 open System
 open System.Collections.Generic
 open System.Diagnostics
@@ -1078,7 +1080,7 @@ type ProcessProvenanceService private () =
 
         sb.AppendLine() |> ignore
 
-        sb.AppendLine($"Generated {generated} by AutoCommand Process Monitor (read-only inquiry)")
+        sb.AppendLine($"Generated {generated} by {Branding.DisplayName} Process Monitor (read-only inquiry)")
         |> ignore
 
         sb.ToString()

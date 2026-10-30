@@ -21,6 +21,8 @@
 
 namespace AutoCommand.Engines.Watch
 
+open AutoCommand.Engines.Core
+
 open System
 open System.Collections.Generic
 open System.IO
@@ -96,7 +98,7 @@ type RdapService() as this =
             let version = if isNull (box v) then "1.0" else v.ToString(3)
 
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                $"AutoCommand/{version} (Windows network-attribution client)")
+                $"{Branding.DisplayName}/{version} (Windows network-attribution client)")
         with _ -> () // UA is politeness, not correctness
 
         client
