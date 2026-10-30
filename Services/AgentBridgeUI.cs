@@ -16,7 +16,26 @@ namespace AutoCommand.Services
     /// </summary>
     public sealed class AgentBridgeUI : IAgentBridgeUI
     {
-        public bool IsUiAvailable => Application.Current?.MainWindow != null;
+        /// <summary>
+        /// Called from the RPC listener thread, before any mutating tool
+        /// runs. Application.MainWindow is a VerifyThread() property, so the
+        /// read itself must be marshalled — reading it inline was the crash
+        /// behind EVERY mutating-tool call ("The calling thread cannot
+        /// access this object…", even for dry_run, because the engine
+        /// checks UI availability before the handler's dry-run branch).
+        /// </summary>
+        public bool IsUiAvailable
+        {
+            get
+            {
+                var app = Application.Current;      // static reference — thread-safe
+                if (app == null) return false;
+                var d = app.Dispatcher;             // DispatcherObject.Dispatcher is thread-safe by design
+                if (d.CheckAccess()) return app.MainWindow != null;
+                try { return (bool)d.Invoke(new Func<bool>(() => app.MainWindow != null)); }
+                catch { return false; }             // dispatcher shut down = no UI
+            }
+        }
 
         public void BeginInvokeOnUI(Action action)
         {

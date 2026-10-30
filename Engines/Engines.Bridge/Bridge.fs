@@ -541,16 +541,28 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                 return ($"Tool '{name}' exists, but this session runs WITHOUT mutating tools — " +
                         "headless/background sessions have no UI to confirm actions with. Start a session " +
                         "from the running app's AI access settings and retry there.", true)
-            elif tool.Mutating && not (this.SessionGranted(AgentBridgeService.GrantKey(name, args))) then
-                let allowed, note = this.RequestConfirmation(name, AgentBridgeService.GrantKey(name, args), tool.ConfirmDetail(args.ToJsonString()))
-                if not allowed then
-                    return ($"User denied '{name}'" + (if note.Length > 0 then $" — {note}" else "") + ".", true)
+            else
+                // dry_run=true is the documented "resolve and preview only"
+                // contract for every mutating tool that offers it: no
+                // confirmation, no change, and no UI needs to exist at all.
+                // Checked BEFORE the confirmation branch — the field bug
+                // where dry_run crashed identically to a real call was this
+                // ordering (the UI pre-check ran first, off the UI thread).
+                let dryRunOnly =
+                    match args["dry_run"] with
+                    | null -> false
+                    | v -> v.ToString().Trim().Equals("true", StringComparison.OrdinalIgnoreCase)
+
+                if tool.Mutating && not dryRunOnly && not (this.SessionGranted(AgentBridgeService.GrantKey(name, args))) then
+                    let allowed, note = this.RequestConfirmation(name, AgentBridgeService.GrantKey(name, args), tool.ConfirmDetail(args.ToJsonString()))
+                    if not allowed then
+                        return ($"User denied '{name}'" + (if note.Length > 0 then $" — {note}" else "") + ".", true)
+                    else
+                        let! output = Task.Run(fun () -> tool.Invoke(args.ToJsonString()))
+                        return (output, false)
                 else
                     let! output = Task.Run(fun () -> tool.Invoke(args.ToJsonString()))
                     return (output, false)
-            else
-                let! output = Task.Run(fun () -> tool.Invoke(args.ToJsonString()))
-                return (output, false)
         }
 
     member private _.SessionGranted (grantKey: string) =
@@ -579,7 +591,15 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
         if not mutatingAllowed then (false, "mutating tools are disabled for this session")
         else
             let uiInstance = AgentBridgeService.Ui
-            if isNull (box uiInstance) || not uiInstance.IsUiAvailable then
+            // A UI hook that THROWS here (the original bug: reading a
+            // VerifyThread() WPF property from this RPC thread) reports
+            // "no UI" — the tool returns a clean, actionable denial instead
+            // of surfacing raw WPF exception text to the client.
+            let uiReady =
+                try
+                    not (isNull (box uiInstance)) && uiInstance.IsUiAvailable
+                with _ -> false
+            if not uiReady then
                 (false, "headless session has no UI to confirm with — restart the session from "
                         + identity.Name + " Settings to allow mutating tools")
             else

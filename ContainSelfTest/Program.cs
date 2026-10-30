@@ -355,6 +355,23 @@ var gone = incidents.First(i => i.EventsAction == "removed");
 Check("audit: expiry sentence names the target",
       gone.Sentence.Contains("142.251.210.131"), gone.Sentence);
 
+// update-mode sessions narrate as fleet incidents with the actor the
+// Audit tab shows ("you · Windows Update")
+var uo = AuditTrail.ParseLine($"{auditT0.AddSeconds(2000):O}|update-opened|-|-|78 target(s) lifted, hard stop 22:00|update-mode");
+var ur = AuditTrail.ParseLine($"{auditT0.AddSeconds(2010):O}|update-restored|-|-|78/78 target(s) restored · verified on|update-mode");
+Check("audit: update events parse", uo != null && ur != null);
+var uInc = AuditTrail.BuildIncidents(new[] { uo, ur }.Where(e => e != null));
+Check("audit: update session collapses to one fleet incident, resolved",
+      uInc.Count == 1 && uInc[0].Category == "fleet" && uInc[0].Severity == "resolved",
+      $"{uInc.Count} incident(s)");
+Check("audit: update sentences read as a session",
+      uInc[0].Sentence.Contains("updated Windows") && uInc[0].Sentence.Contains("78") &&
+      uInc[0].Sentence.Contains("restored"),
+      uInc[0].Sentence);
+Check("audit: update actor names the tab, not a mystery",
+      AuditTrail.ActorFor("update-mode") == "you · Windows Update",
+      AuditTrail.ActorFor("update-mode"));
+
 Check("audit: every incident has a day header", incidents.All(i => i.DayHeader.Length > 0));
 string auditMarker = Path.Combine(Path.GetTempPath(), "audit-seen-" + Guid.NewGuid().ToString("N"));
 try

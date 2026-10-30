@@ -1092,7 +1092,9 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                     {
                         case "fleet-disabled":
                         case "fleet-enabled":
-                        case "consolidated": fleet++; break;
+                        case "consolidated":
+                        case "update-opened":
+                        case "update-restored": fleet++; break;
                         case "rule-toggled": toggles++; break;
                         case "paused": paused++; break;
                         case "resumed": resumed++; break;

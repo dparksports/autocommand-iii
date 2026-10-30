@@ -116,9 +116,14 @@ namespace AutoCommand.Contain.Core
             foreach (var e in events)
             {
                 string cat = CategoryOf(e.Action);
-                bool standalone = cat == "fleet";
-                bool joins = current != null && !standalone &&
-                             e.Action == current.EventsAction &&
+                // fleet ops stand alone — but an update session's opened and
+                // restored halves are ONE incident ("You updated Windows…"),
+                // so update-* events may join each other across actions.
+                bool standalone = cat == "fleet" && !e.Action.StartsWith("update-", StringComparison.Ordinal);
+                bool joinsAction = current != null &&
+                    (e.Action == current.EventsAction ||
+                     (e.Action == "update-restored" && current.EventsAction == "update-opened"));
+                bool joins = current != null && !standalone && joinsAction &&
                              e.Origin == current.EventsOrigin &&
                              e.TimeUtc - current.EndUtc <= GroupWindow;
 
@@ -139,7 +144,10 @@ namespace AutoCommand.Contain.Core
 
                 current.Events.Add(e);
                 current.EndUtc = e.TimeUtc;
-                current.Count += CountIn(e.Action, e.Detail);
+                // the restored half of an update session describes the SAME
+                // targets the opened half counted — don't double-count them
+                if (!(e.Action == "update-restored" && current.EventsAction == "update-opened"))
+                    current.Count += CountIn(e.Action, e.Detail);
                 current.KindCounts.TryGetValue(e.Kind, out var n);
                 current.KindCounts[e.Kind] = n + 1;
                 current.EventLines.Add($"{e.TimeUtc.ToLocalTime():h:mm tt}  {RawLine(e)}");
@@ -158,7 +166,8 @@ namespace AutoCommand.Contain.Core
 
         public static string CategoryOf(string action) => action switch
         {
-            "fleet-disabled" or "fleet-enabled" or "consolidated" or "imported" => "fleet",
+            "fleet-disabled" or "fleet-enabled" or "consolidated" or "imported"
+                or "update-opened" or "update-restored" => "fleet",
             "paused" or "resumed" or "rule-toggled" => "pause",
             "created" or "removed" or "attributed" => "auto",
             _ => "external"      // external-modified and anything the OS feed adds later
@@ -170,6 +179,7 @@ namespace AutoCommand.Contain.Core
             "removed" or "attributed" or "resumed" => "routine",
             "paused" or "rule-toggled" => "info",
             "fleet-disabled" or "fleet-enabled" or "consolidated" => "resolved",
+            "update-opened" or "update-restored" => "resolved",
             "imported" => "routine",
             _ => detail != null && detail.Contains("restored", StringComparison.OrdinalIgnoreCase)
                 ? "resolved"
@@ -191,6 +201,7 @@ namespace AutoCommand.Contain.Core
             "restore-guide" => "you · restore guide",
             "undo" => "you · undo",
             "mcp" => "AI session · gate",
+            "update-mode" => "you · Windows Update",
             _ => origin.Length == 0 ? "unknown" : origin
         };
 
@@ -239,6 +250,17 @@ namespace AutoCommand.Contain.Core
 
                 case "consolidated":
                     return "Legacy block rules were consolidated to the current scheme";
+
+                case "update-opened":
+                    // merged session (opened + restored halves): the one
+                    // sentence the whole session is remembered by
+                    if (inc.Events.Any(x => x.Action == "update-restored"))
+                        return $"You updated Windows — {Noun(inc.Count, "block")} paused for " +
+                               $"{Math.Max(1, (int)(inc.EndUtc - inc.StartUtc).TotalMinutes)} min, all restored";
+                    return $"You started a Windows Update session — {inc.Events[0].Detail}";
+
+                case "update-restored":
+                    return $"Windows Update session finished — {inc.Events[0].Detail}";
 
                 case "imported":
                     return "Blocks were imported from an older install";

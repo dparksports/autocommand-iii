@@ -164,6 +164,41 @@ try
     token = again["token"].GetValue<string>();
     bridge.Stop();
     Check("6c own session.json is deleted on Stop", !File.Exists(sessionPath));
+
+    // ── 7. gate path: dry_run never prompts; a throwing UI hook denies ──
+    // Field bug this section pins: every mutating call (dry_run included)
+    // failed with WPF's "The calling thread cannot access this object…"
+    // because the engine's UI pre-check ran on the RPC listener thread.
+    var (okMut, msgMut) = bridge.Start(allowMutating: true);
+    Check("7a mutating session starts", okMut, msgMut);
+    var mut = JsonNode.Parse(File.ReadAllText(sessionPath)) as JsonObject;
+    port = mut["port"].GetValue<int>();
+    token = mut["token"].GetValue<string>();
+
+    // The reproduction: a UI hook whose availability check throws exactly
+    // like reading a VerifyThread() WPF property off the UI thread.
+    AutoCommand.Engines.Bridge.AgentBridgeService.Ui = new ThrowingUi();
+
+    Raw(Post("{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"initialize\"," +
+        "\"params\":{\"protocolVersion\":\"2025-06-18\",\"clientInfo\":{\"name\":\"bridge-selftest\"}}}"));
+
+    var (sDry, bodyDry) = Raw(Post("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\"," +
+        "\"params\":{\"name\":\"open_gate\",\"arguments\":{\"target\":\"1.2.3.4\",\"minutes\":1,\"dry_run\":\"true\"}}}"));
+    var dryResult = (JsonNode.Parse(bodyDry) as JsonObject)?["result"];
+    string dryText = (dryResult?["content"] as JsonArray)?[0]?["text"]?.GetValue<string>() ?? "";
+    Check("7b dry_run bypasses confirmation entirely — handler runs, no crash",
+        sDry == 200 && dryText.Contains("state") && !dryText.Contains("calling thread") &&
+        (dryResult?["isError"]?.GetValue<bool>() ?? false) == false,
+        Trunc(dryText));
+
+    var (sThrow, bodyThrow) = Raw(Post("{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\"," +
+        "\"params\":{\"name\":\"open_gate\",\"arguments\":{\"target\":\"1.2.3.4\",\"minutes\":1}}}"));
+    string throwText = (((JsonNode.Parse(bodyThrow) as JsonObject)?["result"])?["content"] as JsonArray)?[0]?["text"]?.GetValue<string>() ?? "";
+    Check("7c UI hook throwing off-thread denies cleanly (no raw WPF text)",
+        sThrow == 200 && throwText.Contains("no UI to confirm") && !throwText.Contains("calling thread"),
+        Trunc(throwText));
+
+    AutoCommand.Engines.Bridge.AgentBridgeService.Ui = null;
 }
 finally
 {
@@ -199,4 +234,16 @@ sealed class StubTools : IAgentTools
         : name == "open_gate" ? new StubTool(name, true)
         : null;
     public string BuildMonitorSnapshot() => null;
+}
+
+/// <summary>The bug reproduction: an availability check that throws exactly
+/// like WPF's VerifyThread() does when read from the RPC listener thread —
+/// "a different thread owns it". The engine must not crash on it.</summary>
+sealed class ThrowingUi : IAgentBridgeUI
+{
+    public bool IsUiAvailable => throw new InvalidOperationException(
+        "The calling thread cannot access this object because a different thread owns it.");
+    public void BeginInvokeOnUI(Action action) { }
+    public Task<Tuple<bool, bool>> ShowConfirmAsync(string tool, string detail) =>
+        Task.FromResult(Tuple.Create(false, false));
 }
