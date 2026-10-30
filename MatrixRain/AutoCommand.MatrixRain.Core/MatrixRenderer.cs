@@ -478,27 +478,42 @@ namespace AutoCommand.Matrix
                     continue;
                 }
 
-                // green where the head has crossed
+                // green where the head has crossed — each cell is CLEARED
+                // first: the previous pass's decayed glyph must not bleed
+                // through the new glyph's antialiased pixels (two letters
+                // in one cell is overwriting, not rain)
                 for (int r = Math.Max(0, prevRow + 1); r <= newRow && r < _gridRows; r++)
+                {
+                    int cy = _bandH + r * _atlas.CellH;
+                    ClearCell(dstBase, stride, x, cy, _atlas.CellW, _atlas.CellH, _w, _h);
                     BlitClipped(dstBase, stride, _atlas.Trail[_rand.Next(n)],
-                        _atlas.CellW, _atlas.CellH, x, _bandH + r * _atlas.CellH,
+                        _atlas.CellW, _atlas.CellH, x, cy,
                         _w, _h, (int)(256 * s.Brightness));
+                }
 
                 // the white tip
                 if (newRow >= 0 && newRow < _gridRows)
+                {
+                    int ty = _bandH + newRow * _atlas.CellH;
+                    ClearCell(dstBase, stride, x, ty, _atlas.CellW, _atlas.CellH, _w, _h);
                     BlitClipped(dstBase, stride, _atlas.Head[s.Glyph],
-                        _atlas.CellW, _atlas.CellH, x, _bandH + newRow * _atlas.CellH,
+                        _atlas.CellW, _atlas.CellH, x, ty,
                         _w, _h, 244);
                     DebugDraws++;
+                }
 
                 // mid-trail mutation — the film's shimmer
                 if (newRow > 4 && _rand.NextDouble() < 0.12)
                 {
                     int mr = newRow - _rand.Next(1, Math.Min(16, newRow));
                     if (mr >= 0)
+                    {
+                        int my = _bandH + mr * _atlas.CellH;
+                        ClearCell(dstBase, stride, x, my, _atlas.CellW, _atlas.CellH, _w, _h);
                         BlitClipped(dstBase, stride, _atlas.Trail[_rand.Next(n)],
-                            _atlas.CellW, _atlas.CellH, x, _bandH + mr * _atlas.CellH,
+                            _atlas.CellW, _atlas.CellH, x, my,
                             _w, _h, (int)(256 * s.Brightness));
+                    }
                 }
             }
         }
@@ -532,20 +547,46 @@ namespace AutoCommand.Matrix
                     BlitClipped(dstBase, stride, bloom[d.GlyphIndex],
                         bw, bh, x + (cw - bw) / 2, y + (ch - bh) / 2, _w, _h, 256);
                 }
+                // clear the STANDARD cell before the sharp glyph: the lead
+                // must REPLACE the wall glyph under it, not blend with its
+                // ghost (clearing the larger lift rect would nick the
+                // neighboring cells' glyph edges)
+                ClearCell(dstBase, stride, ColumnX(col),
+                    _bandH + d.Row * _atlas.CellH, _atlas.CellW, _atlas.CellH, _w, _h);
                 BlitClipped(dstBase, stride, headSet[d.GlyphIndex], cw, ch, x, y, _w, _h, 256);
             }
         }
 
         /// <summary>A vacated data-lead row in cinema: bold green, full
-        /// strength — the data trail reads over the decorative wall.</summary>
+        /// strength — stamped into a CLEARED cell so it replaces the wall
+        /// glyph instead of superimposing on it.</summary>
         private unsafe void DrawGreenCell(RainColumn col, int row, int glyphIndex, int alpha)
         {
             if (row < 0 || row >= _gridRows) return;
             int x = ColumnX(col);
             if (x < 0) return;
-            BlitClipped((byte*)_bmp.BackBuffer, _bmp.BackBufferStride,
+            byte* dstBase = (byte*)_bmp.BackBuffer;
+            int stride = _bmp.BackBufferStride;
+            int y = _bandH + row * _atlas.CellH;
+            ClearCell(dstBase, stride, x, y, _atlas.CellW, _atlas.CellH, _w, _h);
+            BlitClipped(dstBase, stride,
                 _atlas.Trail[glyphIndex], _atlas.CellW, _atlas.CellH,
-                x, _bandH + row * _atlas.CellH, _w, _h, alpha);
+                x, y, _w, _h, alpha);
+        }
+
+        /// <summary>Zeroes a cell rect (clipped to the surface) — replacement
+        /// semantics for stamps on the ever-occupied cinema wall. Without it
+        /// the over-blend keeps a fraction of the previous glyph's
+        /// antialiased pixels: two letters in one cell.</summary>
+        private static unsafe void ClearCell(byte* dstBase, int stride, int x, int y, int w, int h, int maxW, int maxH)
+        {
+            int cw = Math.Min(w, maxW - x);
+            int ch = Math.Min(h, maxH - y);
+            if (cw <= 0 || ch <= 0) return;
+            byte* d = dstBase + y * stride + x * 4;
+            for (int r = 0; r < ch; r++, d += stride)
+                for (int c = 0; c < cw * 4; c++)
+                    d[c] = 0;
         }
 
         /// <summary>Writes this frame's wake into the backdrop: each cell a
