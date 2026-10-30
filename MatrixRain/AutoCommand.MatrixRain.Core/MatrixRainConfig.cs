@@ -16,6 +16,14 @@ namespace AutoCommand.Matrix
         /// <summary>left | right | full | manual — where the overlay lives.</summary>
         public string Dock { get; set; } = "right";
 
+        /// <summary>cinema | instrument — cinema (the default) is the
+        /// movie's look: a dense wall of green rain on every column,
+        /// continuous varied-speed streams, white lead glyphs, mutating
+        /// trail characters, pure black behind; real transmits still ride
+        /// on top brighter, bloomed and PID-labeled. instrument is the
+        /// event-driven stillness: nothing moves without a packet.</summary>
+        public string Style { get; set; } = "cinema";
+
         /// <summary>desktop | overlay — "desktop" parents the pane to the
         /// wallpaper host (WorkerW): the rain paints over the desktop but
         /// APPLICATION WINDOWS COVER IT, visible only where the desktop
@@ -174,6 +182,7 @@ namespace AutoCommand.Matrix
                 var doc = new Dictionary<string, object>
                 {
                     ["// dock"] = "left | right | full (whole screen, explicit) | manual (position below)",
+                    ["// style"] = "cinema = the movie look (dense green rain everywhere, data streams on top) | instrument = event-driven stillness",
                     ["// surface"] = "desktop = behind app windows, over the wallpaper (default) | overlay = above everything",
                     ["// fontFile"] = "optional absolute path to a .ttf/.otf — overrides fontFamily",
                     ["// charset"] = "katakana (default - no roman letters or digits, a field foreign to humankind) | katakana-latin | latin | digits - or a literal set of characters",
@@ -211,6 +220,7 @@ namespace AutoCommand.Matrix
         public void Normalize()
         {
             Dock = Dock?.Trim().ToLowerInvariant() is "left" or "full" or "manual" ? Dock.Trim().ToLowerInvariant() : "right";
+            Style = Style?.Trim().ToLowerInvariant() == "instrument" ? "instrument" : "cinema";
             Surface = Surface?.Trim().ToLowerInvariant() == "overlay" ? "overlay" : "desktop";
             WidthPx = Math.Clamp(WidthPx, 120, 4096);
             Opacity = Math.Clamp(Opacity, 0.30, 1.0);

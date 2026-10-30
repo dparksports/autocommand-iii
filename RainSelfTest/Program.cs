@@ -75,6 +75,7 @@ namespace RainSelfTest
             Loaded += (s, e) =>
             {
                 _cfg = MatrixRainConfig.LoadOrDefault();
+                _cfg.Style = "cinema";   // self-test the movie look
                 _feed = new SynthFeed();
                 _renderer = new MatrixRenderer(ambient, rain, () => _feed.Latest, _cfg);
                 _renderer.SetSurfaceSize(ActualWidth, ActualHeight);

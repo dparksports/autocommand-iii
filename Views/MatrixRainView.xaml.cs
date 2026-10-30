@@ -139,7 +139,7 @@ namespace AutoCommand.Views
         // ------------------------------------------------------------------
 
         private MenuItem _speedItem;
-        private MenuItem _labelsItem, _rxItem, _bloomItem, _ambientItem, _diagItem;
+        private MenuItem _labelsItem, _rxItem, _bloomItem, _ambientItem, _diagItem, _styleItem;
         private MenuItem _charsetMenu, _zLiftMenu;
 
         private void BuildMenu()
@@ -159,6 +159,10 @@ namespace AutoCommand.Views
             _bloomItem = Check("Bloom on the lead", () => Mutate(c => c.Bloom = !c.Bloom));
             _ambientItem = Check("Frozen backdrop", () => Mutate(c => c.Ambient = !c.Ambient));
             _diagItem = Check("Diagnostics strip", () => { _diagVisible = !_diagVisible; UpdateDiag(); });
+            _styleItem = Check("Movie look (cinema)", () => Mutate(c =>
+                c.Style = c.Style == "cinema" ? "instrument" : "cinema"));
+            menu.Items.Add(_styleItem);
+            menu.Items.Add(new Separator());
             menu.Items.Add(_labelsItem);
             menu.Items.Add(_rxItem);
             menu.Items.Add(_bloomItem);
@@ -222,6 +226,7 @@ namespace AutoCommand.Views
             _bloomItem.IsChecked = _cfg.Bloom;
             _ambientItem.IsChecked = _cfg.Ambient;
             _diagItem.IsChecked = _diagVisible;
+            _styleItem.IsChecked = _cfg.Style == "cinema";
             SyncRadios(_charsetMenu, _cfg.Charset);
             SyncRadios(_zLiftMenu, _cfg.ZLift.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
         }

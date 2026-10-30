@@ -85,7 +85,7 @@ namespace AutoCommand.Matrix
             foreach (var ch in chars)
                 maxW = Math.Max(maxW, Measure(typeface, em, ch.ToString()));
             atlas.CellW = Math.Max(4, (int)Math.Ceiling(maxW) + 2);
-            atlas.CellH = Math.Max(6, (int)Math.Ceiling(em * 1.35));
+            atlas.CellH = Math.Max(6, (int)Math.Ceiling(em * 1.12));   // movie-tight vertical stack
 
             atlas.LabelCellW = Math.Max(4, (int)Math.Ceiling(Measure(typeface, labelEm, "0")) + 2);
             atlas.LabelCellH = Math.Max(5, (int)Math.Ceiling(labelEm * 1.45));
@@ -164,7 +164,7 @@ namespace AutoCommand.Matrix
                     // name — the documented loose-font-file form.
                     var folderUri = new Uri(fileUri, ".");
                     var ff = new FontFamily(folderUri, "./#" + name);
-                    var tf = new Typeface(ff, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                    var tf = new Typeface(ff, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
                     if (tf.TryGetGlyphTypeface(out _))
                     {
                         resolved = $"{name} ({Path.GetFileName(cfg.FontFile)})";
@@ -175,11 +175,11 @@ namespace AutoCommand.Matrix
             }
 
             var family = new FontFamily(cfg.FontFamily);
-            var face = new Typeface(family, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            var face = new Typeface(family, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
             if (!face.TryGetGlyphTypeface(out _))
             {
                 family = new FontFamily("Consolas");
-                face = new Typeface(family, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                face = new Typeface(family, FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
                 resolved = $"Consolas (fallback — '{cfg.FontFamily}' not installed)";
             }
             else
