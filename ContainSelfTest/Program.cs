@@ -382,6 +382,77 @@ try
 }
 finally { try { File.Delete(auditMarker); } catch { } }
 
+// ─────────────────────────────────────────────────────────────────────
+// 7. MatchesAppTarget — the unblock family semantics. AppBlockCoverage-
+//    Service keeps a name-blocked exe blocked at every path it runs from,
+//    so a single-path unblock that leaves a sibling rule resurrects the
+//    block on the exe's next run (observed live 2026-10-30: bash.exe
+//    unblocked at 20:17, re-extended by the Git\bin sibling at 20:20, six
+//    duplicate rules from unserialized concurrent adds).
+// ─────────────────────────────────────────────────────────────────────
+var acNaming = AutoCommand.Engines.Firewall.Naming.autocommand();
+bool M(string ruleName, string ruleApp, string target) =>
+    AutoCommand.Engines.Firewall.FirewallService.MatchesAppTarget(acNaming, ruleName, ruleApp, target);
+
+Check("match: exact path covered", M("AC-BLOCK-APP bash.exe (Out)", @"C:\Program Files\Git\usr\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: case-insensitive path", M("AC-BLOCK-APP bash.exe (Out)", @"C:\Program Files\Git\USR\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: '..' path normalizes to the same image",
+      M("AC-BLOCK-APP bash.exe (Out)", @"C:\Program Files\Git\usr\lib\..\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: sibling path — same exe NAME, different dir (the resurrection leg)",
+      M("AC-BLOCK-APP bash.exe (Out) · 63746dcd", @"C:\Program Files\Git\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: legacy family prefix honored",
+      M("AutoCommand Process Block - bash.exe (Outbound Block)", @"C:\old\path\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: different exe name is NOT the family",
+      !M("AC-BLOCK-APP sh.exe (Out)", @"C:\Program Files\Git\usr\bin\sh.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: non-family rule name never matches",
+      !M("Google Update (Out)", @"C:\Program Files\Git\usr\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: family rule with empty ApplicationName never matches a path",
+      !M("AC-BLOCK-APP bash.exe (Out)", "", @"C:\Program Files\Git\usr\bin\bash.exe"));
+Check("match: device-path form falls back to leaf-name family match",
+      M("AC-BLOCK-APP bash.exe (Out)", @"\Device\HarddiskVolume3\Program Files\Git\usr\bin\bash.exe", @"C:\Program Files\Git\usr\bin\bash.exe"));
+
+// The store-side half of family unblock: sibling-path records must go with
+// the exact-key one, or the Blocked list keeps showing the exe.
+var famDir = Path.Combine(Path.GetTempPath(), "contain-selftest-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var fam = new BlocksLedger(famDir);
+    fam.AddOrUpdate(new BlockRecord { Kind = "proc", Key = @"C:\Program Files\Git\usr\bin\bash.exe", Origin = "monitor" });
+    fam.AddOrUpdate(new BlockRecord { Kind = "proc", Key = @"C:\Program Files\Git\bin\bash.exe", Origin = "reconcile" });
+    fam.AddOrUpdate(new BlockRecord { Kind = "proc", Key = @"C:\Windows\System32\smartscreen.exe", Origin = "monitor" });
+    fam.AddOrUpdate(new BlockRecord { Kind = "ip", Key = "142.251.214.99", Origin = "monitor" });
+    int removedRecs = fam.RemoveForExeName("bash.exe");
+    Check("store: family remove drops every path record of the exe",
+          removedRecs == 2 && fam.Records.Count == 2 &&
+          fam.Records.Any(r => r.Key == @"C:\Windows\System32\smartscreen.exe") &&
+          fam.Records.Any(r => r.IsIp), $"gone={removedRecs}, left={fam.Records.Count}");
+    Check("store: family remove logs one family event",
+          File.ReadAllText(fam.EventLogPath).Contains("family · 2 record(s)"));
+    Check("store: family remove of an unknown exe is a no-op", fam.RemoveForExeName("nope.exe") == 0);
+}
+finally { try { Directory.Delete(famDir, true); } catch { } }
+
+// ─────────────────────────────────────────────────────────────────────
+// 8. CountRedundantDuplicates — the quota-aware duplicate definition.
+//    Distinct shapes (TCP+UDP per IP, the paths of a name family) never
+//    count; only exact identity repeats do.
+// ─────────────────────────────────────────────────────────────────────
+int D(params string[] ids) => AutoCommand.Engines.Firewall.FirewallService.CountRedundantDuplicates(ids);
+
+Check("dup: v2 quota shape (TCP+UDP) is not a duplicate",
+      D("AC-BLOCK-IP 1.2.3.4 (TCP Out)", "AC-BLOCK-IP 1.2.3.4 (UDP Out)") == 0);
+Check("dup: same name twice counts one redundant",
+      D("AC-BLOCK-APP bash.exe (Out)", "AC-BLOCK-APP bash.exe (Out)") == 1);
+Check("dup: six race-era copies count five redundant",
+      D(Enumerable.Repeat("AC-BLOCK-APP bash.exe (Out)", 6).ToArray()) == 5);
+Check("dup: app identity includes the path — family paths are not dups",
+      D("AC-BLOCK-APP x.exe (Out)|C:\\a\\x.exe", "AC-BLOCK-APP x.exe (Out)|C:\\b\\x.exe") == 0);
+Check("dup: same name + same path is one redundant",
+      D("AC-BLOCK-APP x.exe (Out)|C:\\a\\x.exe", "AC-BLOCK-APP x.exe (Out)|C:\\a\\x.exe") == 1);
+Check("dup: mixed identities sum per-identity redundants",
+      D("n", "n", "m", "m", "m") == 3);
+Check("dup: empty input is clean", D(Array.Empty<string>()) == 0);
+
 Console.WriteLine();
 Console.WriteLine(failures == 0 ? "ALL CONTAIN SELF-TESTS PASSED" : $"{failures} CHECK(S) FAILED");
 return failures == 0 ? 0 : 1;

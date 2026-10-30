@@ -1180,7 +1180,14 @@ namespace AutoCommand.Views
         /// <summary>Asks once, then removes the block (rules + monitor record) and toasts the outcome.</summary>
         private async Task ConfirmAndRemoveBlockAsync(string kind, string key)
         {
-            if (MessageBox.Show($"Remove the firewall block for\n{key}?\n\nIts rules are deleted and traffic resumes immediately.",
+            // Process blocks are a NAME family (AppBlockCoverageService keeps
+            // a blocked exe covered at every path it runs from) — say so, so
+            // the removal scope is never a surprise.
+            string family = kind == "ip"
+                ? ""
+                : "\n\nThis lifts every path the executable is blocked from —\n" +
+                  "coverage siblings included, or they would re-block it on its next run.";
+            if (MessageBox.Show($"Remove the firewall block for\n{key}?\n\nIts rules are deleted and traffic resumes immediately.{family}",
                 "Confirm Unblock", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             await RemoveBlockCoreAsync(kind, key);
         }
@@ -1194,12 +1201,46 @@ namespace AutoCommand.Views
                     ? await FirewallService.Instance.RemoveBlockRulesForIpAsync(key)
                     : await FirewallService.Instance.RemoveBlockRulesForAppAsync(key);
 
-                BlocksStore.Remove(kind, key);
+                if (kind == "ip")
+                {
+                    BlocksStore.Remove(kind, key);
+                }
+                else
+                {
+                    // The removal above lifted the whole name family — drop
+                    // the exe from the coverage cache (a spawn arriving before
+                    // the next 30 s inventory refresh must not re-extend what
+                    // this just lifted) and clear every sibling-path record.
+                    string exeName = System.IO.Path.GetFileName(key);
+                    AppBlockCoverageService.Instance.NotifyUnblocked(exeName);
+                    BlocksStore.RemoveForExeName(exeName);
+                }
                 RefreshBlockedUi();
+
+                // Verify against the live firewall before claiming success: a
+                // surviving rule re-blocks on the next run, and "unblocked but
+                // still reported blocked" must never be a silent outcome.
+                var inventory = await FirewallService.Instance.GetBlockedInventoryAsync();
+                int surviving = kind == "ip"
+                    ? inventory.Count(t => t.Kind == "ip" &&
+                        string.Equals(t.Ip, key, StringComparison.OrdinalIgnoreCase) && t.EnabledRules > 0)
+                    : inventory.Count(t => t.Kind == "app" && t.EnabledRules > 0 &&
+                        string.Equals(System.IO.Path.GetFileName(t.AppPath ?? ""), System.IO.Path.GetFileName(key),
+                                      StringComparison.OrdinalIgnoreCase));
+
                 _ = RefreshBlockStateFromFirewallAsync();
-                ShowToast(removed > 0
-                        ? $"✅ Unblocked {key} — {removed} firewall rule(s) removed, traffic resumes."
-                        : $"No matching firewall rules found for {key} (already removed?).");
+                if (surviving > 0)
+                {
+                    ShowToast(removed > 0
+                        ? $"⚠ {surviving} enabled rule(s) still cover {key} ({removed} removed) — the block persists. Check 'Blocked' → Manage all."
+                        : $"⚠ Nothing was removed — {surviving} enabled rule(s) still cover {key}. Check 'Blocked' → Manage all.");
+                }
+                else
+                {
+                    ShowToast(removed > 0
+                            ? $"✅ Unblocked {key} — {removed} firewall rule(s) removed, traffic resumes."
+                            : $"No matching firewall rules found for {key} (already removed?).");
+                }
             }
             catch (Exception ex)
             {

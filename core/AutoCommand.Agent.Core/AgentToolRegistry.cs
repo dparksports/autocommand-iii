@@ -199,6 +199,18 @@ namespace AutoCommand.Agent.Core
                 a => VerifyBlockContainment(a)),
 
             new Tool(
+                "audit_block_duplicates",
+                "Read-only duplicate audit of AutoCommand's block rules: per target, how many rules are " +
+                "exact duplicates of another (same rule name — and for process rules, the same image " +
+                "path). Duplicates are inert residue of concurrent blocking (blocking is unchanged) but " +
+                "clutter wf.msc, skew inventory counts and re-appear on every reconcile; the Rules tab's " +
+                "'Clean duplicates' retires them. One executable name covered at several paths is " +
+                "intentional coverage and is NOT reported here.",
+                Schema(),
+                false,
+                _ => AuditBlockDuplicates()),
+
+            new Tool(
                 "check_host",
                 "'Why can't I reach this site?' in one call: resolve a hostname, then per address — range " +
                 "classification, whether it is on AutoCommand's blocked list (with rule count and since " +
@@ -714,6 +726,38 @@ namespace AutoCommand.Agent.Core
         private static void EnsureFeedStarted()
         {
             try { BlockHitFeedService.Instance.Start(); } catch { }
+        }
+
+        private static string AuditBlockDuplicates()
+        {
+            var inv = FirewallService.Instance.GetBlockedInventoryAsync().GetAwaiter().GetResult();
+            var rows = new JsonArray();
+            int flagged = 0, totalDups = 0;
+            foreach (var t in inv)
+            {
+                if (t.DuplicateRules <= 0) continue;
+                flagged++;
+                totalDups += t.DuplicateRules;
+                rows.Add(new JsonObject
+                {
+                    ["kind"] = t.Kind,
+                    ["target"] = t.Target,
+                    ["path"] = t.Kind == "app" ? t.AppPath : null,
+                    ["ip"] = t.Kind == "ip" ? t.Ip : null,
+                    ["rules"] = t.Rules,
+                    ["duplicates"] = t.DuplicateRules,
+                });
+            }
+            return ToJson(new JsonObject
+            {
+                ["type"] = "block_duplicates",
+                ["targets_with_duplicates"] = flagged,
+                ["duplicate_rules"] = totalDups,
+                ["verdict"] = totalDups == 0
+                    ? "clean — every target carries exactly its intended rule shapes"
+                    : $"residue found — {totalDups} duplicate rule(s) on {flagged} target(s); retire via the Rules tab's 'Clean duplicates'",
+                ["rows"] = rows,
+            });
         }
 
         private static string ListBlocks(JsonObject a)

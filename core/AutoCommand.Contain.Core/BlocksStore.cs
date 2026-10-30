@@ -425,6 +425,32 @@ namespace AutoCommand.Contain.Core
             }
         }
 
+        /// <summary>
+        /// Family removal: drops every process-block record whose key is a
+        /// path ending in this exe name. AppBlockCoverageService keeps a
+        /// name-blocked exe covered at every path it runs from, so the store
+        /// accumulates one record per path — removing only the exact-key
+        /// record leaves the siblings listed as blocked after a family
+        /// unblock. One audit line covers the whole family.
+        /// </summary>
+        public int RemoveForExeName(string exeName, string origin = "monitor")
+        {
+            if (string.IsNullOrEmpty(exeName)) return 0;
+            lock (_gate)
+            {
+                Load();
+                int gone = _records.RemoveAll(b => !b.IsIp && string.Equals(
+                    Path.GetFileName(b.Key ?? ""), exeName, StringComparison.OrdinalIgnoreCase));
+                if (gone > 0)
+                {
+                    Save();
+                    AppendEvent("removed", "proc", exeName,
+                        $"family · {gone} record(s) across paths", origin);
+                }
+                return gone;
+            }
+        }
+
         /// <summary>Marks the desired state (on/off). The firewall's Enabled
         /// flags stay authoritative for traffic; this is the durable intent.</summary>
         public void SetStatus(string kind, string key, string status, string origin = "blocks-tab")
@@ -618,6 +644,7 @@ namespace AutoCommand.Contain.Core
             => _default.TryParseServiceFromDescription(desc, out serviceKey, out displayName);
         public static void AddOrUpdate(BlockRecord record, string origin = "monitor") => _default.AddOrUpdate(record, origin);
         public static void Remove(string kind, string key, string origin = "monitor") => _default.Remove(kind, key, origin);
+        public static int RemoveForExeName(string exeName, string origin = "monitor") => _default.RemoveForExeName(exeName, origin);
         public static void SetStatus(string kind, string key, string status, string origin = "blocks-tab") => _default.SetStatus(kind, key, status, origin);
         public static bool DeferredSaves { get => _default.DeferredSaves; set => _default.DeferredSaves = value; }
         public static void FlushPending() => _default.FlushPending();

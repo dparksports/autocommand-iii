@@ -49,6 +49,10 @@ type BlockedTarget() =
     /// rules whose image path no longer exists on disk (inert after an app
     /// update/move) — autocommand-ii members the autoscope port predates
     member val StaleRules: int = 0 with get, set
+    /// rules that are exact duplicates of another rule on this target (same
+    /// rule name — and for app rules, the same ApplicationName): inert residue
+    /// of pre-fix concurrent blocking, retired by the one-click cleanup
+    member val DuplicateRules: int = 0 with get, set
     /// why coverage is incomplete (stale path, sibling gap, …)
     member val CoverageNote: string = null with get, set
 
@@ -126,6 +130,15 @@ type FirewallService(naming: FirewallNaming) =
     // prefix now routes through the injected naming record instead.
 
     static let groupNameCache = Dictionary<string, string>(StringComparer.Ordinal)
+
+    // App-block adds are check-then-act over the process-global policy store
+    // (dedupe by path, then add). Concurrent adds — a burst of Sysmon EID 1
+    // events for the same exe, each firing EnsureCoveredAsync fire-and-forget
+    // — can all pass the "no rule for this path" check before any of them
+    // lands a rule, piling up identical duplicates (observed live: six copies
+    // of one bash.exe rule created in the same minute). Serializing the add
+    // body makes the dedupe check authoritative.
+    static let appAddGate = new System.Threading.SemaphoreSlim(1, 1)
 
     let getPolicy () : INetFwPolicy2 = Com.getPolicy2 ()
 
@@ -537,10 +550,57 @@ type FirewallService(naming: FirewallNaming) =
         )
 
     /// <summary>
-    /// Removes the inbound/outbound block rules previously created for an
-    /// application path (matched on the rule name prefixes used by the
-    /// monitor views plus the exact ApplicationName). Returns the removal
-    /// count.
+    /// Pure matcher: does an app-family block rule cover this unblock target.
+    /// Exact path, path-normalized equality (MainModule hands out '..'-bearing
+    /// strings and the rule stores whatever it was given; device-path forms
+    /// fall back to the raw compare), or — the load-bearing leg — the same
+    /// exe leaf NAME: AppBlockCoverageService keeps a name-blocked exe
+    /// blocked wherever it runs from, so a surviving sibling-path rule
+    /// (versioned folder, second install root) keeps the whole name in the
+    /// blocked set and re-extends it to the unblocked path on the exe's next
+    /// run. Unblocking one path must lift the family. Public and COM-free so
+    /// ContainSelfTest can pin the semantics.
+    /// </summary>
+    static member MatchesAppTarget(naming: FirewallNaming, ruleName: string, ruleApp: string, targetPath: string) : bool =
+        let inFamily =
+            (not (isNull ruleName))
+            && (startsWithAny naming.LegacyAppPrefixes ruleName
+                || startsWith naming.OwnAppPrefix ruleName
+                || List.exists (fun p -> startsWith p ruleName) naming.AdoptedPrefixes)
+
+        if not inFamily then false
+        elif String.Equals(ruleApp, targetPath, StringComparison.OrdinalIgnoreCase) then true
+        else
+            let norm (p: string) =
+                if String.IsNullOrWhiteSpace p then p
+                else try Path.GetFullPath(p) with _ -> p
+
+            let leaf (p: string) =
+                if String.IsNullOrEmpty p then ""
+                else try Path.GetFileName(p) with _ -> p
+
+            String.Equals(norm ruleApp, norm targetPath, StringComparison.OrdinalIgnoreCase)
+            || String.Equals(leaf ruleApp, leaf targetPath, StringComparison.OrdinalIgnoreCase)
+
+    /// <summary>
+    /// Pure duplicate accounting: given one identity string per rule (IP
+    /// rules: the full rule name — app rules: rule name + ApplicationName),
+    /// returns how many are redundant (all but the first of each identity).
+    /// This is the number the inventory badge and the cleanup button show,
+    /// and exactly the count the cleanup retires — nothing else. A target's
+    /// distinct shapes (TCP+UDP, the paths of a name family) never count.
+    /// </summary>
+    static member CountRedundantDuplicates(identities: string seq) : int =
+        identities |> Seq.groupBy id |> Seq.sumBy (fun (_, g) -> (Seq.length g) - 1)
+
+    /// <summary>
+    /// Removes the block rules for an application across its whole NAME
+    /// family — every rule whose exe leaf name matches the target, not just
+    /// the rules whose ApplicationName equals it. The coverage service
+    /// deliberately keeps a name-blocked exe blocked at every path it runs
+    /// from, so removing one path's rules while a sibling survives leaves
+    /// the exe blocked and the sibling re-extends to the unblocked path on
+    /// the next run ("unblock doesn't stick"). Returns the removal count.
     /// </summary>
     member _.RemoveBlockRulesForAppAsync(appPath: string) : Task<int> =
         Task.Run(fun () ->
@@ -562,12 +622,7 @@ type FirewallService(naming: FirewallNaming) =
                             | null -> ""
                             | a -> a
 
-                        if
-                            (startsWithAny naming.LegacyAppPrefixes name
-                             || startsWith naming.OwnAppPrefix name
-                             || List.exists (fun p -> startsWith p name) naming.AdoptedPrefixes)
-                            && String.Equals(app, appPath, StringComparison.OrdinalIgnoreCase)
-                        then
+                        if FirewallService.MatchesAppTarget(naming, name, app, appPath) then
                             names.Add(name)
                     with _ -> ()
 
@@ -610,6 +665,83 @@ type FirewallService(naming: FirewallNaming) =
             raise (Exception($"Failed to remove firewall rules: {ex.Message}", ex))
 
         removed
+
+    /// <summary>
+    /// One-click duplicate cleanup: retires every rule that is an exact
+    /// duplicate of another rule on its target (same rule name — and for app
+    /// rules the same ApplicationName). Distinct shapes (TCP+UDP per IP, the
+    /// paths of a name family) are never touched, a target can never lose its
+    /// last rule, and the keeper per identity is the first enabled rule, else
+    /// the first — its description (the provenance) survives. Removal is
+    /// rename-then-remove: INetFwRules.Remove matches by name and duplicates
+    /// SHARE the keeper's name, so each retiring rule is first renamed to a
+    /// unique quarantine name (blocking is untouched — a renamed block rule
+    /// still blocks) and only then removed by that unique name, so the
+    /// by-name delete can never take the keeper with it. Excess legacy+v2
+    /// mixes without exact duplicates are NOT touched here — that is the
+    /// legacy consolidation's job. Returns (identities cleaned, rules
+    /// retired, first error).
+    /// </summary>
+    member _.RemoveDuplicateBlockRulesAsync() : Task<struct (int * int * string)> =
+        Task.Run(fun () ->
+            appAddGate.Wait()
+            try
+                try
+                    let fwPolicy = getPolicy ()
+                    let groups = Dictionary<string, ResizeArray<INetFwRule>>(StringComparer.OrdinalIgnoreCase)
+
+                    for r in Com.enumRules fwPolicy.Rules do
+                        try
+                            let (ours, name) = FirewallService.IsOurBlock(naming, r)
+
+                            if ours then
+                                let app =
+                                    match r.ApplicationName with
+                                    | null -> ""
+                                    | a -> a
+
+                                let identity =
+                                    if isIpRule naming name r then name
+                                    else name + "|" + app
+
+                                let mutable list = Unchecked.defaultof<ResizeArray<INetFwRule>>
+                                if not (groups.TryGetValue(identity, &list)) then
+                                    list <- ResizeArray<INetFwRule>()
+                                    groups.[identity] <- list
+                                list.Add(r)
+                        with _ -> ()
+
+                    let stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")
+                    let mutable cleaned = 0
+                    let mutable retired = 0
+                    let mutable firstError = null
+
+                    for KeyValue(identity, rules) in groups do
+                        if rules.Count > 1 then
+                            cleaned <- cleaned + 1
+                            let keeper =
+                                rules
+                                |> Seq.tryFind (fun r -> (try r.Enabled with _ -> false))
+                                |> Option.defaultValue rules.[0]
+
+                            let mutable i = 0
+                            for r in rules do
+                                if not (Object.ReferenceEquals(r, keeper)) then
+                                    i <- i + 1
+                                    try
+                                        let quarantine = $"{identity.Split('|').[0]} · dedup-{stamp}-{i}"
+                                        r.Name <- quarantine
+                                        fwPolicy.Rules.Remove(quarantine) |> ignore
+                                        retired <- retired + 1
+                                    with ex ->
+                                        if isNull firstError then firstError <- ex.Message
+
+                    struct (cleaned, retired, firstError)
+                with ex ->
+                    raise (Exception($"Failed to remove duplicate block rules: {ex.Message}", ex))
+            finally
+                appAddGate.Release() |> ignore
+        )
 
     // ── managed block fleet ──────────────────────────────────────────
     //
@@ -774,59 +906,77 @@ type FirewallService(naming: FirewallNaming) =
         result
 
     static member private AddAppBlockCore(naming: FirewallNaming, appPath: string, description: string) : struct (int * int * string) =
+        // Serialized: the dedupe check below is check-then-act over the
+        // process-global policy store, and concurrent callers (a burst of
+        // Sysmon EID 1 coverage extensions for the same exe) all pass it
+        // before any rule lands — six identical bash.exe rules were observed
+        // live. Holding appAddGate across the body makes the check
+        // authoritative.
+        appAddGate.Wait()
         try
-            let exe = Path.GetFileName(if isNull appPath then "" else appPath)
+            try
+                let exe = Path.GetFileName(if isNull appPath then "" else appPath)
 
-            if exe.Length = 0 then
-                raise (ArgumentException("App block needs a path with a file name.", "appPath"))
+                if exe.Length = 0 then
+                    raise (ArgumentException("App block needs a path with a file name.", "appPath"))
 
-            let fwPolicy = Com.getPolicy2 ()
-            let mine = FirewallService.GetAppRulesForExe(naming, fwPolicy, exe)
+                let fwPolicy = Com.getPolicy2 ()
+                let mine = FirewallService.GetAppRulesForExe(naming, fwPolicy, exe)
 
-            // True duplicate — this exact path is already blocked: refresh
-            // provenance only, never a second rule for the same image.
-            let samePath =
-                mine
-                |> Seq.tryFind (fun (_, app, _) -> String.Equals(app, appPath, StringComparison.OrdinalIgnoreCase))
+                // True duplicate — this exact path is already blocked: refresh
+                // provenance only, never a second rule for the same image.
+                // GetFullPath on both sides: MainModule hands out '..'-bearing
+                // strings and the rule stores whatever it was given, so raw
+                // equality misses those and re-adds.
+                let normPath (p: string) =
+                    if String.IsNullOrWhiteSpace p then p
+                    else try Path.GetFullPath(p) with _ -> p
 
-            match samePath with
-            | Some(sameName, _, _) ->
-                let mutable updated = 0
-                let existing = FirewallService.FindRule(fwPolicy, sameName)
+                let samePath =
+                    mine
+                    |> Seq.tryFind (fun (_, app, _) ->
+                        String.Equals(normPath app, normPath appPath, StringComparison.OrdinalIgnoreCase))
 
-                if not (isNull existing) then
-                    try
-                        existing.Description <- description
-                        updated <- updated + 1
-                    with _ -> ()
+                match samePath with
+                | Some(sameName, _, _) ->
+                    let mutable updated = 0
+                    let existing = FirewallService.FindRule(fwPolicy, sameName)
 
-                    struct (0, updated, sameName)
-                else
-                    struct (0, updated, null)
-            | None ->
-                let primary = $"{naming.OwnAppPrefix}{exe} (Out)"
+                    if not (isNull existing) then
+                        try
+                            existing.Description <- description
+                            updated <- updated + 1
+                        with _ -> ()
 
-                let name =
-                    if isNull (FirewallService.FindRule(fwPolicy, primary)) then primary
-                    else $"{primary} · {FirewallService.PathHash8(appPath)}"
+                        struct (0, updated, sameName)
+                    else
+                        struct (0, updated, null)
+                | None ->
+                    let primary = $"{naming.OwnAppPrefix}{exe} (Out)"
 
-                // Path-hash sibling collision means the same path under
-                // different casing — treat as duplicate and leave as-is.
-                if not (isNull (FirewallService.FindRule(fwPolicy, name))) then
-                    struct (0, 0, name)
-                else
-                    let rule = Com.newRule ()
-                    rule.Action <- FwAction.Block
-                    rule.Direction <- FwRuleDirection.Out
-                    rule.Enabled <- true
-                    rule.InterfaceTypes <- "All"
-                    rule.Name <- name
-                    rule.ApplicationName <- appPath
-                    rule.Description <- description
-                    fwPolicy.Rules.Add(rule)
-                    struct (1, 0, name)
-        with ex ->
-            raise (Exception($"Failed to add app block: {ex.Message}", ex))
+                    let name =
+                        if isNull (FirewallService.FindRule(fwPolicy, primary)) then primary
+                        else $"{primary} · {FirewallService.PathHash8(appPath)}"
+
+                    // Path-hash sibling collision means the same path under
+                    // different casing — treat as duplicate and leave as-is.
+                    if not (isNull (FirewallService.FindRule(fwPolicy, name))) then
+                        struct (0, 0, name)
+                    else
+                        let rule = Com.newRule ()
+                        rule.Action <- FwAction.Block
+                        rule.Direction <- FwRuleDirection.Out
+                        rule.Enabled <- true
+                        rule.InterfaceTypes <- "All"
+                        rule.Name <- name
+                        rule.ApplicationName <- appPath
+                        rule.Description <- description
+                        fwPolicy.Rules.Add(rule)
+                        struct (1, 0, name)
+            with ex ->
+                raise (Exception($"Failed to add app block: {ex.Message}", ex))
+        finally
+            appAddGate.Release() |> ignore
 
     /// <summary>
     /// Adds a 1-rule (outbound) app block, idempotent BY PATH, not just by
@@ -1036,6 +1186,8 @@ type FirewallService(naming: FirewallNaming) =
     member _.GetBlockedInventoryAsync() : Task<ResizeArray<BlockedTarget>> =
         Task.Run(fun () ->
             let byKey = Dictionary<string, BlockedTarget>(StringComparer.OrdinalIgnoreCase)
+            // per-target rule identities for duplicate accounting (below)
+            let identitiesByTarget = Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
 
             try
                 let fwPolicy = getPolicy ()
@@ -1106,6 +1258,20 @@ type FirewallService(naming: FirewallNaming) =
                                             "program path no longer exists on disk — rule is inert "
                                             + "(app updated or moved); AppBlockCoverageService re-points or retires it"
 
+                            // duplicate accounting: one identity per rule —
+                            // IP rules by full name (embeds ip/proto/direction),
+                            // app rules by name + image path (the same name
+                            // across paths is the coverage family, not a dup)
+                            let identity =
+                                if isIpRule naming name r then name
+                                else name + "|" + app
+
+                            let mutable seen = Unchecked.defaultof<HashSet<string>>
+                            if not (identitiesByTarget.TryGetValue(t.Key, &seen)) then
+                                seen <- HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                identitiesByTarget.[t.Key] <- seen
+                            seen.Add(identity) |> ignore
+
                             t.Rules <- t.Rules + 1
 
                             if enabled then t.EnabledRules <- t.EnabledRules + 1
@@ -1115,6 +1281,11 @@ type FirewallService(naming: FirewallNaming) =
                             if not t.Created.HasValue then t.Created <- FirewallService.ParseBlockedTime desc
                         with _ -> ()
             with _ -> ()
+
+            for KeyValue(key, seen) in identitiesByTarget do
+                let mutable t = Unchecked.defaultof<BlockedTarget>
+                if byKey.TryGetValue(key, &t) then
+                    t.DuplicateRules <- FirewallService.CountRedundantDuplicates seen
 
             byKey
                 .Values.OrderByDescending(fun (t: BlockedTarget) -> t.Class)

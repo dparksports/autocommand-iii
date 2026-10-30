@@ -1425,13 +1425,19 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
             if ((sender as FrameworkElement)?.Tag is not BlockRowVm vm) return;
             if (MessageBox.Show(
                     $"Permanently remove the block for\n{vm.Record.Key}?\n\nIts firewall rules are deleted and traffic resumes immediately. " +
+                    (!vm.Record.IsIp
+                        ? "This lifts every path the executable is blocked from — coverage siblings included, or they would re-block it on its next run. "
+                        : "") +
                     "This is recorded in the block history log.",
                     "Remove block", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
 
             int removed = vm.Record.IsIp
                 ? await FirewallService.Instance.RemoveBlockRulesForIpAsync(vm.Record.Key)
                 : await FirewallService.Instance.RemoveBlockRulesForAppAsync(vm.Record.Key);
-            BlocksStore.Remove(vm.Record.Kind, vm.Record.Key, "blocks-tab");
+            if (vm.Record.IsIp)
+                BlocksStore.Remove(vm.Record.Kind, vm.Record.Key, "blocks-tab");
+            else
+                BlocksStore.RemoveForExeName(System.IO.Path.GetFileName(vm.Record.Key), "blocks-tab");
             _trafficCache.Remove(vm.Record.Kind + vm.Record.Key);
             await ReloadAsync();
         }

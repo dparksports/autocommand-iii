@@ -26,6 +26,8 @@
             <Button Content="✕ Unblock selected" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="UnblockSelectedBtn_Click" Margin="0,0,8,0"/>
             <Button x:Name="UnblockMsBtn" Content="✕ Unblock Microsoft-owned ⚠" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="UnblockMsBtn_Click" Margin="0,0,8,0"/>
             <Button x:Name="ConsolidateBtn" Content="🧹 Consolidate legacy (4→2 rules)" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="ConsolidateBtn_Click" Margin="0,0,8,0"/>
+            <Button x:Name="DedupBtn" Content="🧹 Clean duplicates" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="DedupBtn_Click" Margin="0,0,8,0"
+                    ToolTip="Retires exact-duplicate rules (same name, same target) — inert residue of concurrent blocking. One rule per identity is kept with its provenance; blocking is unchanged and continuous. Legacy 4→2 mixes are the Consolidate button's job."/>
             <Button Content="⬇ Export CSV" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="ExportBtn_Click" Margin="0,0,8,0"/>
             <Button x:Name="ReenableBtn" Content="↩ Re-enable all (undo panic)" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="ReenableBtn_Click" Margin="0,0,8,0"/>
             <Button x:Name="RestoreExceptRiskyBtn" Content="↩ Restore except Microsoft/Windows ⚠" Style="{StaticResource PrimaryButton}" Padding="10,2" Click="RestoreExceptRiskyBtn_Click" Margin="0,0,8,0"
@@ -53,6 +55,7 @@
                 <DataGridTextColumn Header="Kind"      Binding="{Binding Kind}"     Width="46"/>
                 <DataGridTextColumn Header="Owner / class" Binding="{Binding Class}" Width="150"/>
                 <DataGridTextColumn Header="Rules"     Binding="{Binding RulesSummary}" Width="90"/>
+                <DataGridTextColumn Header="Dups"      Binding="{Binding DupsDisplay}"  Width="46"/>
                 <DataGridTextColumn Header="Blocked"   Binding="{Binding CreatedDisplay}" Width="120"/>
                 <DataGridTextColumn Header="Hits 1h"   Binding="{Binding HitsDisplay}"   Width="70"/>
                 <DataGridTextColumn Header="RDAP owner" Binding="{Binding OwnerDisplay}" Width="170"/>

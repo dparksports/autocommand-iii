@@ -25,7 +25,7 @@ namespace AutoCommand.Views
         private class Row : INotifyPropertyChanged
         {
             public string Target, Kind, Key, Ip, AppPath, Class, Description;
-            public int Rules, EnabledRules;
+            public int Rules, EnabledRules, Duplicates;
             public DateTime? Created;
             private int _hits;
             public int Hits
@@ -36,6 +36,7 @@ namespace AutoCommand.Views
             public bool IsRisky => Class.Contains("Microsoft") || Class.Contains("Akamai") ||
                                    Class.Contains("Gcore") || Class.Contains("Windows component");
             public string RulesSummary => EnabledRules == Rules ? Rules.ToString() : $"{EnabledRules}/{Rules} on";
+            public string DupsDisplay => Duplicates > 0 ? $"+{Duplicates}" : "·";
             public string CreatedDisplay => Created?.ToString("yyyy-MM-dd HH:mm") ?? "legacy";
             public string HitsDisplay => Hits > 0 ? Hits.ToString() : "·";
             public string OwnerDisplay { get; set; } = "";
@@ -113,8 +114,8 @@ namespace AutoCommand.Views
                 _rows.Add(new Row
                 {
                     Target = t.Target, Kind = t.Kind, Key = t.Key, Ip = t.Ip, AppPath = t.AppPath,
-                    Class = t.Class, Rules = t.Rules, EnabledRules = t.EnabledRules, Hits = h,
-                    Description = t.Description, Created = t.Created, OwnerDisplay = owner,
+                    Class = t.Class, Rules = t.Rules, EnabledRules = t.EnabledRules, Duplicates = t.DuplicateRules,
+                    Hits = h, Description = t.Description, Created = t.Created, OwnerDisplay = owner,
                 });
             }
 
@@ -174,6 +175,9 @@ namespace AutoCommand.Views
                     ? ""
                     : " · firewall drop-logging off (optional second hit source; the live feed works without it)");
             ConsolidateBtn.IsEnabled = _rows.Any(r => r.Rules > 2 && r.Kind == "ip");
+            int dups = _rows.Sum(r => r.Duplicates);
+            DedupBtn.IsEnabled = dups > 0;
+            DedupBtn.Content = dups > 0 ? $"🧹 Clean duplicates ({dups})" : "🧹 Clean duplicates";
             UnblockMsBtn.IsEnabled = risky > 0;
             EnableLogBtn.Visibility = FirewallService.FirewallDropLoggingOn()
                 ? Visibility.Collapsed : Visibility.Visible;
@@ -234,7 +238,11 @@ namespace AutoCommand.Views
             var sel = RulesGrid.SelectedItems.Cast<Row>().ToList();
             if (sel.Count == 0) { MessageBox.Show("Select one or more rows first.", "Unblock"); return; }
             if (MessageBox.Show($"Permanently remove the block rules for {sel.Count} target(s)?\n" +
-                string.Join("\n", sel.Select(r => $"  · {r.Target} ({r.Class}, {r.Rules} rules)")),
+                string.Join("\n", sel.Select(r => $"  · {r.Target} ({r.Class}, {r.Rules} rules)")) +
+                (sel.Any(r => r.Kind != "ip")
+                    ? "\n\nApp targets lift every path the executable is blocked from (coverage siblings),\n" +
+                      "or a surviving path would re-block it on its next run."
+                    : ""),
                 "Confirm unblock", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             int removed = 0;
@@ -263,6 +271,31 @@ namespace AutoCommand.Views
                     ? await FirewallService.Instance.RemoveBlockRulesForIpAsync(r.Ip)
                     : await FirewallService.Instance.RemoveBlockRulesForAppAsync(r.AppPath);
             StatusText.Text = $"Removed {removed} rule(s) blocking Microsoft/Windows infrastructure.";
+            await ReloadAsync();
+        }
+
+        private async void DedupBtn_Click(object sender, RoutedEventArgs e)
+        {
+            int dups = _rows.Sum(r => r.Duplicates);
+            if (dups == 0) return;
+            if (MessageBox.Show($"Retire {dups} exact-duplicate rule(s)?\n\n" +
+                    "One rule per identity is kept with its provenance. Blocking is unchanged and\n" +
+                    "continuous — each retiree is renamed to a quarantine name before removal, so\n" +
+                    "the by-name delete can never take the keeper with it. Recorded in the block\n" +
+                    "history log.",
+                    "Clean duplicates", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+
+            DedupBtn.IsEnabled = false;
+            try
+            {
+                var (cleaned, retired, error) = await FirewallService.Instance.RemoveDuplicateBlockRulesAsync();
+                BlocksStore.LogFleet("dedup-retired",
+                    $"{retired} duplicate rule(s) retired across {cleaned} target(s)", "rules-tab");
+                StatusText.Text = error == null
+                    ? $"Removed {retired} duplicate rule(s) across {cleaned} target(s)."
+                    : $"Removed {retired} duplicate rule(s); some failed: {error}";
+            }
+            finally { DedupBtn.IsEnabled = true; }
             await ReloadAsync();
         }
 

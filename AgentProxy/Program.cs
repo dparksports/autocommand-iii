@@ -41,6 +41,7 @@ const string OfflineToolsJson = """
   { "name": "list_gates", "description": "Open block gates with remaining minutes, requester and reason (needs an active session)." },
   { "name": "list_recent_block_hits", "description": "Live process-attributed feed of connects hitting firewall blocks — the 'who is being blocked' view (needs an active session)." },
   { "name": "verify_block_containment", "description": "Prove blocked processes are silent, not just trying: block attempts joined against live sockets and archived transmissions since block creation (needs an active session)." },
+  { "name": "audit_block_duplicates", "description": "Read-only duplicate audit of the block rules: per target, rules that exactly duplicate another (blocking unchanged, but clutter and skewed counts); the Rules tab's 'Clean duplicates' retires them (needs an active session)." },
   { "name": "check_host", "description": "'Why can't I reach this site?' — resolve, check blocked-list membership per address, plain-English verdict (needs an active session)." },
   { "name": "investigate_process", "description": "The whole 'why is this transmitting?' playbook for one PID in a single call — provenance, traffic profile, block-hit check, plain-English verdict (needs an active session)." },
   { "name": "diagnose_site", "description": "The Site Doctor pipeline for one hostname: fingerprint, dependency-block pass, live probes, verdict (needs an active session)." },

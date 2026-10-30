@@ -172,7 +172,7 @@ namespace AutoCommand.Contain.Core
         public static string CategoryOf(string action) => action switch
         {
             "fleet-disabled" or "fleet-enabled" or "consolidated" or "imported"
-                or "update-opened" or "update-restored" => "fleet",
+                or "update-opened" or "update-restored" or "dedup-retired" => "fleet",
             "paused" or "resumed" or "rule-toggled" => "pause",
             "created" or "removed" or "attributed" => "auto",
             _ => "external"      // external-modified and anything the OS feed adds later
@@ -185,6 +185,7 @@ namespace AutoCommand.Contain.Core
             "paused" or "rule-toggled" => "info",
             "fleet-disabled" or "fleet-enabled" or "consolidated" => "resolved",
             "update-opened" or "update-restored" => "resolved",
+            "dedup-retired" => "resolved",
             "imported" => "routine",
             _ => detail != null && detail.Contains("restored", StringComparison.OrdinalIgnoreCase)
                 ? "resolved"
@@ -255,6 +256,9 @@ namespace AutoCommand.Contain.Core
 
                 case "consolidated":
                     return "Legacy block rules were consolidated to the current scheme";
+
+                case "dedup-retired":
+                    return $"Duplicate block rules were cleaned up — {inc.Events[0].Detail}";
 
                 case "update-opened":
                     // merged session (opened + restored halves): the one

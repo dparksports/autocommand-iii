@@ -246,6 +246,24 @@ namespace AutoCommand.Contain.Core
             catch { /* never let a coverage check disturb the caller */ }
         }
 
+        /// <summary>
+        /// Called the moment a target is unblocked: drops the exe name from
+        /// the cached blocked-name set so a process-create arriving before
+        /// the next 30 s inventory refresh cannot re-extend the block the
+        /// user just lifted (for a constantly-spawning exe that window is a
+        /// guaranteed resurrection, not a race). The next RefreshCacheAsync
+        /// re-reads the firewall and restores truth — including a surviving
+        /// sibling's rules, should any remain.
+        /// </summary>
+        public void NotifyUnblocked(string exeName)
+        {
+            if (string.IsNullOrEmpty(exeName)) return;
+            lock (_gate)
+            {
+                _blockedNames.Remove(exeName);
+            }
+        }
+
         private async Task RunRetirePassAsync()
         {
             try
