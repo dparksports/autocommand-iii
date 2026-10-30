@@ -230,7 +230,8 @@ namespace AutoCommand
 
             // Auto-started AI session (opt-in from Settings → AI access): the
             // consent was given once at the checkbox; every launch honors it.
-            // Read-only unless the mutating preference is separately on.
+            // Read-only tools answer freely; the gate pair confirms per call
+            // in the app (mutating is the gates, nothing else).
             if (AgentAutostartPrefOn())
             {
                 var (ok, message) = AgentBridgeService.Instance.Start(

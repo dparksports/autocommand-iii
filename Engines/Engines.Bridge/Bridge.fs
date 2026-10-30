@@ -18,6 +18,7 @@ open System.Net.Sockets
 open System.Runtime.InteropServices
 open System.Security.Cryptography
 open System.Text
+open System.Text.Encodings.Web
 open System.Text.Json
 open System.Text.Json.Nodes
 open System.Threading
@@ -107,6 +108,13 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
     static member MaxBodyBytes = 4 * 1024 * 1024
     static member ConfirmTimeoutMs = 90_000
 
+    // Every JSON-RPC body this bridge writes goes through one encoder:
+    // relaxed escaping keeps tool payloads embedded as content.text readable
+    // (" and newline, not \u0022 and \u000a). Valid JSON either way — but
+    // hand-rolled clients kept double-decoding around the escaped form
+    // (field report), so the wire now carries the conventional form.
+    static member private JsonOpts = JsonSerializerOptions(Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+
     member _.AgentDir = agentDir
     member _.ClientName = clientName
     member _.ConnectedCalls = connectedCalls
@@ -184,9 +192,32 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             listener <- null
             if not (isNull cts) then cts.Dispose()
             cts <- null
-            (try if File.Exists(sessionPath) then File.Delete(sessionPath) with _ -> ())
+            // Delete OUR session file only. Sibling AutoCommand instances
+            // share agent\, and the file describes whichever session started
+            // LAST — one instance exiting must not revoke the other's live
+            // session (field report: the new build's autostarted session
+            // lost its file when the old build's exit path ran Stop, leaving
+            // a live mutating bridge no client could authenticate to).
+            (try
+                if File.Exists(sessionPath) && this.SessionFileBelongsToThisProcess() then
+                    File.Delete(sessionPath)
+             with _ -> ())
             this.LogActivity("session", "stopped", "")
             activity.Trigger([| box "session stopped" |])
+
+    /// <summary>True when session.json carries THIS process's pid — the only
+    /// file Stop may delete. A sibling's file (its pid) belongs to the other
+    /// live session. An unreadable or pid-less file counts as ours so a
+    /// stopping session still cleans up after itself.</summary>
+    member private _.SessionFileBelongsToThisProcess () : bool =
+        try
+            match JsonNode.Parse(File.ReadAllText(sessionPath)) with
+            | :? JsonObject as o ->
+                match o["pid"] with
+                | null -> true
+                | p -> try p.GetValue<int>() = Process.GetCurrentProcess().Id with _ -> true
+            | _ -> true
+        with _ -> true
 
     /// <summary>True when a live session file matches a running bridge
     /// (crash-cleanup helper for the stdio bridge).</summary>
@@ -231,10 +262,12 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
 
     member private _.HandleClient (client: TcpClient, ct: CancellationToken) : Task =
         task {
+            // hoisted so the last-resort handler below can still answer
+            let mutable stream: NetworkStream = null
             try
                 use __ = client
                 client.ReceiveTimeout <- 120_000
-                let stream = client.GetStream()
+                stream <- client.GetStream()
 
                 let! head = AgentBridgeService.ReadUntilAsync(stream, "\r\n\r\n", 64 * 1024)
                 if isNull head then
@@ -250,9 +283,13 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                             headers.[lines.[i].Substring(0, c).Trim()] <- lines.[i].Substring(c + 1).Trim()
 
                     if method <> "POST" then
+                        // JSON-RPC error body like every other rejection, so
+                        // a misdirected client sees one dialect everywhere
+                        do! AgentBridgeService.DrainBody(stream, headers)
                         do! AgentBridgeService.WriteJsonResponse(stream,
                             (if method = "GET" then 405 else 400),
-                            "{\"error\":\"POST only (MCP streamable HTTP, stateless)\"}")
+                            AgentBridgeService.RpcError(null, -32001,
+                                "POST only (MCP streamable HTTP, stateless)"))
                     else
                         let hostOk =
                             match headers.TryGetValue("Host") with
@@ -261,6 +298,7 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                                 host.StartsWith("localhost:", StringComparison.OrdinalIgnoreCase)
                             | _ -> false
                         if not hostOk then
+                            do! AgentBridgeService.DrainBody(stream, headers)
                             do! AgentBridgeService.WriteJsonResponse(stream, 403, AgentBridgeService.RpcError(null, -32001, "Forbidden: the bridge is loopback only"))
                         else
                             let authOk =
@@ -268,13 +306,27 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                                 | true, auth -> this.TokenMatches(auth)
                                 | _ -> false
                             if not authOk then
-                                do! AgentBridgeService.WriteJsonResponse(stream, 401, AgentBridgeService.RpcError(null, -32001, "Unauthorized: bad or missing session token. Tokens change on every session restart - re-read session.json in the AutoCommand agent folder"))
+                                do! AgentBridgeService.DrainBody(stream, headers)
+                                do! AgentBridgeService.WriteJsonResponse(stream, 401, AgentBridgeService.RpcError(null, -32001, "Unauthorized: bad or missing session token. Tokens change on every session restart - re-read session.json in the AutoCommand agent folder (no file = no active session: start one from the app's AI access settings)"))
                             else
                                 let contentLength =
                                     match headers.TryGetValue("Content-Length") with
-                                    | true, cl -> (match Int32.TryParse(cl) with true, n -> n | _ -> 0)
-                                    | _ -> 0
-                                if contentLength < 0 || contentLength > AgentBridgeService.MaxBodyBytes then
+                                    | true, cl -> (match Int32.TryParse(cl) with true, n -> Some n | _ -> None)
+                                    | _ -> None
+                                let chunked =
+                                    match headers.TryGetValue("Transfer-Encoding") with
+                                    | true, te -> te.IndexOf("chunked", StringComparison.OrdinalIgnoreCase) >= 0
+                                    | _ -> false
+                                if chunked || contentLength.IsNone then
+                                    // A bodyless parse below used to throw into
+                                    // the catch-all and close the socket with
+                                    // NO response — clients read that as the
+                                    // flaky "empty body" (field report). State
+                                    // the requirement instead.
+                                    do! AgentBridgeService.WriteJsonResponse(stream, 411,
+                                        AgentBridgeService.RpcError(null, -32002, "Content-Length required (the bridge does not read chunked bodies)"))
+                                elif contentLength.Value > AgentBridgeService.MaxBodyBytes then
+                                    do! AgentBridgeService.DrainBody(stream, headers)
                                     do! AgentBridgeService.WriteJsonResponse(stream, 413, AgentBridgeService.RpcError(null, -32002, "Payload too large"))
                                 else
                                     match headers.TryGetValue("Expect") with
@@ -283,17 +335,18 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                                     | _ -> ()
 
                                     let bodyTask =
-                                        if contentLength = 0 then Task.FromResult("")
-                                        else AgentBridgeService.ReadExactAsync(stream, contentLength)
+                                        if contentLength.Value = 0 then Task.FromResult("")
+                                        else AgentBridgeService.ReadExactAsync(stream, contentLength.Value)
                                     let! body = bodyTask
 
-                                    // C# `JsonNode.Parse(body) as JsonObject`:
-                                    // valid-but-not-an-object JSON gets the
-                                    // -32700 parse error; invalid JSON throws
-                                    // and lands in the catch-all below (same
-                                    // split as the C#).
-                                    match JsonNode.Parse(body) with
-                                    | :? JsonObject as rpc ->
+                                    // invalid JSON must ANSWER (-32700), not die
+                                    // in the catch-all: the old split closed
+                                    // the socket bare on parse throws
+                                    let parsed =
+                                        try Some(JsonNode.Parse(body))
+                                        with _ -> None
+                                    match parsed with
+                                    | Some (:? JsonObject as rpc) ->
                                         let rpcId =
                                             if isNull rpc["id"] then null else rpc["id"].ToJsonString()
                                         let! jsonResponse =
@@ -309,7 +362,18 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                                     | _ ->
                                         do! AgentBridgeService.WriteJsonResponse(stream, 400,
                                             AgentBridgeService.RpcError(null, -32700, "Parse error"))
-            with _ -> () // client vanished mid-request — nothing to salvage
+            with _ ->
+                // last resort: answer SOMETHING — a bare close reads as an
+                // empty response on the client (the flaky-empty class).
+                // Best-effort only; a vanished client swallows this too.
+                let _ =
+                    if not (isNull stream) then
+                        try
+                            AgentBridgeService.WriteJsonResponse(stream, 500,
+                                AgentBridgeService.RpcError(null, -32603, "Internal error (connection closing)"))
+                                .GetAwaiter().GetResult()
+                        with _ -> ()
+                ()
         } :> Task
 
     member private _.TokenMatches (authHeader: string) : bool =
@@ -398,8 +462,8 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                         result["instructions"] <- JsonValue.Create(
                             "Read-only security telemetry from the locally running " + identity.Name + " app " +
                             "(process monitor, svchost identity, PID provenance, Sysmon tail, trace analysis). " +
-                            "Mutating tools (block/kill/disable) ask the user for confirmation in the app UI on every call " +
-                            "and are only present when the user enabled them for the session.")
+                            "The only mutating tools are open_gate/close_gate - temporary per-target unblocks " +
+                            "that ask the user for confirmation in the app UI on every single call.")
                         return AgentBridgeService.RpcResult(rpc["id"], result)
 
                     | "notifications/initialized"
@@ -474,8 +538,9 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             if isNull (box tool) then
                 return ($"Unknown tool '{name}'. Call tools/list for this session's tool set.", true)
             elif tool.Mutating && not mutatingAllowed then
-                return ($"Tool '{name}' exists, but this session has mutating tools OFF. " +
-                        "Enable 'Allow mutating tools' in AutoCommand's AI access settings and restart the session.", true)
+                return ($"Tool '{name}' exists, but this session runs WITHOUT mutating tools — " +
+                        "headless/background sessions have no UI to confirm actions with. Start a session " +
+                        "from the running app's AI access settings and retry there.", true)
             elif tool.Mutating && not (this.SessionGranted(AgentBridgeService.GrantKey(name, args))) then
                 let allowed, note = this.RequestConfirmation(name, AgentBridgeService.GrantKey(name, args), tool.ConfirmDetail(args.ToJsonString()))
                 if not allowed then
@@ -631,6 +696,31 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             return Encoding.UTF8.GetString(buffer, 0, read)
         }
 
+    /// <summary>Reads and discards the announced request body before an
+    /// early rejection. Disposing a socket with UNREAD bytes in the receive
+    /// buffer makes Windows send RST instead of FIN — a client that reads
+    /// its response lazily then loses the bytes we just wrote (the flaky
+    /// "response vanished" class). Best-effort: lying Content-Length or a
+    /// vanished client gives up quietly.</summary>
+    static member private DrainBody (stream: NetworkStream, headers: Dictionary<string, string>) : Task =
+        task {
+            let announced =
+                match headers.TryGetValue("Content-Length") with
+                | true, cl -> (match Int32.TryParse(cl) with true, n when n > 0 && n <= AgentBridgeService.MaxBodyBytes -> Some n | _ -> None)
+                | _ -> None
+            match announced with
+            | None -> ()
+            | Some total ->
+                let buffer = Array.zeroCreate<byte> 8192
+                let mutable read = 0
+                let mutable draining = true
+                while draining && read < total do
+                    try
+                        let! n = stream.ReadAsync(buffer, 0, Math.Min(buffer.Length, total - read))
+                        if n = 0 then draining <- false else read <- read + n
+                    with _ -> draining <- false
+        } :> Task
+
     static member private WriteRaw (stream: NetworkStream, text: string) : Task =
         task {
             let bytes = Encoding.ASCII.GetBytes(text)
@@ -639,7 +729,10 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
         } :> Task
 
     static member private WriteResponse (stream: NetworkStream, status: int, body: JsonObject) : Task =
-        AgentBridgeService.WriteJsonResponse(stream, status, (if isNull body then "" else body.ToJsonString()))
+        // re-serialization point for every 200: the relaxed encoder decides
+        // here how tool JSON embedded as content.text is escaped
+        AgentBridgeService.WriteJsonResponse(stream, status,
+            (if isNull body then "" else body.ToJsonString(AgentBridgeService.JsonOpts)))
 
     static member private WriteJsonResponse (stream: NetworkStream, status: int, json: string) : Task =
         task {
@@ -647,7 +740,8 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             let reason =
                 match status with
                 | 200 -> "OK" | 202 -> "Accepted" | 400 -> "Bad Request" | 401 -> "Unauthorized"
-                | 403 -> "Forbidden" | 405 -> "Method Not Allowed" | 413 -> "Payload Too Large"
+                | 403 -> "Forbidden" | 405 -> "Method Not Allowed" | 411 -> "Length Required"
+                | 413 -> "Payload Too Large" | 500 -> "Internal Server Error"
                 | _ -> "Error"
             let head = $"HTTP/1.1 {status} {reason}\r\n" +
                        "Content-Type: application/json\r\n" +
@@ -663,7 +757,7 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
         o["jsonrpc"] <- JsonValue.Create("2.0")
         o["id"] <- (if isNull id then null else id.DeepClone())
         o["result"] <- result
-        o.ToJsonString()
+        o.ToJsonString(AgentBridgeService.JsonOpts)
 
     static member private RpcError (id: JsonNode, code: int, message: string) : string =
         let o = JsonObject()
@@ -673,7 +767,7 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
         err["code"] <- JsonValue.Create(code)
         err["message"] <- JsonValue.Create(message)
         o["error"] <- err
-        o.ToJsonString()
+        o.ToJsonString(AgentBridgeService.JsonOpts)
 
     static member private SummarizeArgs (args: JsonObject) =
         try args.ToJsonString()
