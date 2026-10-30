@@ -136,6 +136,7 @@ namespace AutoCommand.Matrix
             _ambientImage = ambientImage;
             _image = rainImage;
             _latestSource = latest;
+            _frameTimer.Tick += (s, e) => Frame(null, EventArgs.Empty);
             ApplyConfig(cfg);
         }
 
@@ -208,20 +209,37 @@ namespace AutoCommand.Matrix
             RebuildAmbientGrid();
         }
 
+        /// <summary>Live columns and an exponential-average frame rate —
+        /// the diagnostics strip in the Rain tab reads these.</summary>
+        public int LiveColumns => _columns.Count;
+        public double LastFps => _fpsEma;
+        private double _fpsEma;
+
         public void Start()
         {
             if (_running) return;
             _running = true;
             _lastFrameSec = _clock.Elapsed.TotalSeconds;
-            CompositionTarget.Rendering += Frame;
+            _frameTimer.Start();
         }
 
         public void Stop()
         {
             if (!_running) return;
             _running = false;
-            CompositionTarget.Rendering -= Frame;
+            _frameTimer.Stop();
         }
+
+        // DispatcherTimer, NOT CompositionTarget.Rendering: the composition
+        // event only fires when something invalidates the visual tree, and
+        // this loop is its OWN invalidator — one early-out (a not-yet-sized
+        // surface) starves the chain and the rain never starts. A timer
+        // ticks regardless and keeps the loop alive through every gap.
+        private readonly System.Windows.Threading.DispatcherTimer _frameTimer =
+            new(System.Windows.Threading.DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(15)
+            };
 
         // ------------------------------------------------------------------
         // Frame
@@ -240,6 +258,7 @@ namespace AutoCommand.Matrix
             if (dt < 1.0 / fps - 0.0005) return;
             _lastFrameSec = now;
             dt = Math.Clamp(dt, 0.001, 0.25);
+            _fpsEma = _fpsEma <= 0 ? 1.0 / dt : _fpsEma * 0.9 + (1.0 / dt) * 0.1;
 
             ConsumeSnapshot();
 

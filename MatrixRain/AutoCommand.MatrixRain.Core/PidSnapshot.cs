@@ -40,6 +40,11 @@ namespace AutoCommand.Matrix
         public IReadOnlyList<PidSnapshot> Latest => _latest;
         private volatile IReadOnlyList<PidSnapshot> _latest = Array.Empty<PidSnapshot>();
 
+        /// <summary>Last snapshot's shape — the Rain tab's diagnostics
+        /// strip reads these (same dispatcher thread, no locking needed).</summary>
+        public int LastConversationCount;
+        public int LastPidCount;
+
         private readonly ConcurrentDictionary<string, SvchostMonitorItem> _tracked;
         private readonly DispatcherTimer _timer;
         private readonly Dictionary<int, int> _lastConnections = new();
@@ -101,6 +106,8 @@ namespace AutoCommand.Matrix
                 }
 
                 _latest = byPid.Values.OrderByDescending(p => p.TxBytes).ToList();
+                LastConversationCount = _latest.Sum(p => p.Connections);
+                LastPidCount = _latest.Count;
             }
             catch
             {
