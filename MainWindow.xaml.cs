@@ -63,9 +63,53 @@ namespace AutoCommand
             }
         }
 
+        // ── the rain panel: the monitor's collapsible right side ─────────
+        // The Matrix rain lives beside the Process Monitor grid (one glance
+        // apart, same live table) instead of its own tab. The rail toggles
+        // it; collapsing hides the view, and the rain's own IsVisibleChanged
+        // machinery stops the renderer and feed — a hidden panel costs
+        // nothing. State persists as one word in rain_panel.txt, the same
+        // %LOCALAPPDATA%\AutoCommand home as the other preference files.
+
+        private bool _rainCollapsed;
+
+        private static string RainPanelPath => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AutoCommand", "rain_panel.txt");
+
+        private void RainRail_Click(object sender, RoutedEventArgs e)
+        {
+            _rainCollapsed = !_rainCollapsed;
+            ApplyRainPanelState();
+            try
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(RainPanelPath));
+                System.IO.File.WriteAllText(RainPanelPath, _rainCollapsed ? "collapsed" : "expanded");
+            }
+            catch { /* read-only profile — the choice lives for this session */ }
+        }
+
+        private void ApplyRainPanelState()
+        {
+            RainColumn.Width = _rainCollapsed ? new GridLength(0) : new GridLength(330);
+            MatrixRainTab.Visibility = _rainCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            RainRailGlyph.Text = _rainCollapsed ? "‹" : "›";
+            RainRail.ToolTip = _rainCollapsed ? "Expand the Matrix rain" : "Collapse the Matrix rain";
+        }
+
         public MainWindow()
         {
             InitializeComponent();
+
+            // persisted rain-panel state applies BEFORE layout so a
+            // collapsed panel never flashes open on launch
+            try
+            {
+                _rainCollapsed = System.IO.File.Exists(RainPanelPath) &&
+                                 System.IO.File.ReadAllText(RainPanelPath).Trim() == "collapsed";
+            }
+            catch { _rainCollapsed = false; }
+            ApplyRainPanelState();
 
             // Live version from the assembly instead of a hardcoded string
             VersionText.Text = $"AutoCommand v{AppVersion}";
