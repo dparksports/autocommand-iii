@@ -65,7 +65,7 @@ namespace AutoCommand.Matrix
         public double LettersPerTransmit { get; set; } = 1.0;
 
         /// <summary>Cap on rain columns; the stalest PIDs drop out first.</summary>
-        public int MaxColumns { get; set; } = 64;
+        public int MaxColumns { get; set; } = 9;
 
         /// <summary>Firewall block-inventory poll (the red-mode source of
         /// truth) in seconds — same cadence as the main app's monitor.</summary>
@@ -187,6 +187,7 @@ namespace AutoCommand.Matrix
                     ["// fontFile"] = "optional absolute path to a .ttf/.otf — overrides fontFamily",
                     ["// charset"] = "katakana (default - no roman letters or digits, a field foreign to humankind) | katakana-latin | latin | digits - or a literal set of characters",
                     ["// lettersPerTransmit"] = "falling letters per TX packet (auto-scales down under load)",
+                    ["// maxColumns"] = "the pane carries exactly one column per alive process, hard-capped below ten",
                     ["// colors"] = "any #RRGGBB — head/trail/blocked/blockedHead/label/rx/ambient",
                     ["// ambient"] = "dim backdrop field behind the rain, frozen by default (ambientDriftSeconds 0 = the background never changes on its own; only falling wakes etch into it)",
                     ["// zLift"] = "subtle lead-glyph elevation (1.06 default - reads same-height as the background unless you watch carefully; 1.0 = flat, up to 1.6 = dramatic)",
@@ -226,7 +227,8 @@ namespace AutoCommand.Matrix
             Opacity = Math.Clamp(Opacity, 0.30, 1.0);
             FontSizePx = Math.Clamp(FontSizePx, 9, 48);
             LettersPerTransmit = Math.Clamp(LettersPerTransmit, 0.05, 20.0);
-            MaxColumns = Math.Clamp(MaxColumns, 4, 256);
+            // one column per alive process, never ten or more
+            MaxColumns = Math.Clamp(MaxColumns, 1, 9);
             BlockPollSeconds = Math.Clamp(BlockPollSeconds, 10, 3600);
             AmbientDriftSeconds = Math.Clamp(AmbientDriftSeconds, 0.0, 60.0);
             AmbientDensity = Math.Clamp(AmbientDensity, 0.1, 1.0);

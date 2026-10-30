@@ -56,6 +56,10 @@ namespace AutoCommand.Matrix
         public int Seq;                 // creation order — stable tiebreaker
         public string Name = "";
         public bool Blocked, Exited;
+        /// <summary>The PID had at least one live conversation row in the
+        /// latest snapshot — the pane carries exactly one column per such
+        /// process, up to the under-ten cap.</summary>
+        public bool Alive;
         public long LastTx, LastRx;
         public DateTime LastActivityUtc = DateTime.MinValue;
         public DateTime LastHeartbeatUtc = DateTime.MinValue;
@@ -123,6 +127,11 @@ namespace AutoCommand.Matrix
         private double _resortAccumSec;
         private int _creationSeq;
         private IReadOnlyList<PidSnapshot> _consumed = Array.Empty<PidSnapshot>();
+        /// <summary>Alive tracked processes in the latest snapshot — the
+        /// column count IS this number (capped under ten); the wall spans
+        /// exactly the columns the data occupies.</summary>
+        private int _alivePidCount;
+        private int _activeCols;
 
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private double _lastFrameSec;
@@ -223,24 +232,36 @@ namespace AutoCommand.Matrix
             _bandH = _cfg.ShowLabels ? 3 + PidLabelRows * _atlas.LabelCellH + 3 : 0;
             _gridCols = Math.Max(1, _w / _atlas.CellW);
             _gridRows = Math.Max(1, (_h - _bandH) / _atlas.CellH);
-
-            if (Cinema && _deco.Length != _gridCols)
-            {
-                int n = _atlas.GlyphChars.Length;
-                _deco = new DecoStream[_gridCols];
-                for (int c = 0; c < _deco.Length; c++)
-                {
-                    _deco[c] = new DecoStream
-                    {
-                        HeadRow = _rand.Next(-20, _gridRows),
-                        Speed = 9 + _rand.NextDouble() * 17,
-                        Brightness = 0.85 + _rand.NextDouble() * 0.15,
-                        Glyph = _rand.Next(n),
-                        WaitSec = _rand.NextDouble() < 0.10 ? _rand.NextDouble() * 0.8 : -1
-                    };
-                }
-            }
+            // the deco wall is sized to the ALIVE column count every frame
+            // (see Frame) — not to the grid width: the pane carries exactly
+            // as many columns as there are alive processes
             RebuildAmbientGrid();
+        }
+
+        /// <summary>The decorative wall spans exactly the data columns —
+        /// _activeCols of them, hugging the docked edge. Resized whenever
+        /// the alive count or the grid changes; the fade decays any wall
+        /// left outside the region.</summary>
+        private void SyncDecoWall()
+        {
+            if (!Cinema) { _deco = Array.Empty<DecoStream>(); return; }
+            int n = Math.Min(_activeCols, _gridCols);
+            if (_deco.Length == n) return;
+            int glyphs = _atlas.GlyphChars.Length;
+            var old = _deco;
+            _deco = new DecoStream[n];
+            for (int c = 0; c < n; c++)
+            {
+                if (c < old.Length) { _deco[c] = old[c]; continue; }  // keep falling streams
+                _deco[c] = new DecoStream
+                {
+                    HeadRow = _rand.Next(-20, _gridRows),
+                    Speed = 9 + _rand.NextDouble() * 17,
+                    Brightness = 0.85 + _rand.NextDouble() * 0.15,
+                    Glyph = _rand.Next(glyphs),
+                    WaitSec = _rand.NextDouble() < 0.10 ? _rand.NextDouble() * 0.8 : -1
+                };
+            }
         }
 
         /// <summary>Cinema style: the movie's wall of rain. Instrument
@@ -345,7 +366,13 @@ namespace AutoCommand.Matrix
                 if (Cinema)
                 {
                     FadeCinema(dt);
+                    _activeCols = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
+                    SyncDecoWall();
                     StepAndDrawDeco(dt, stride);
+                }
+                else
+                {
+                    _activeCols = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
                 }
 
                 // Re-rank only after REAL events (traffic, attempts,
@@ -366,22 +393,29 @@ namespace AutoCommand.Matrix
 
                 // Edge-anchored slots: the most-active column hugs the edge
                 // the pane is docked against — rightmost when docked right,
-                // leftmost when docked left. Etched wakes belong to grid
-                // cells, so a head that changes columns leaves its old wake
-                // behind as ordinary backdrop.
-                int live = 0;
-                foreach (var c in _orderedColumns)
-                    if (_columns.ContainsKey(c.Pid)) live++;
-                int maxSlots = Math.Min(live, _gridCols);
+                // leftmost when docked left — and the pane carries exactly
+                // ALIVE-count columns (never more than the under-ten cap):
+                // an IP leaves the monitor's table, its column leaves the
+                // pane. Etched wakes belong to grid cells, so a head that
+                // changes columns leaves its old wake behind as ordinary
+                // backdrop.
+                int maxSlots = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
                 bool busiestAtLeft = _cfg.Dock == "left";
 
                 int idx = 0;
+                List<RainColumn> slotless = null;
                 foreach (var col in _orderedColumns)
                 {
-                    if (!_columns.ContainsKey(col.Pid)) continue;
-                    int newSlot = busiestAtLeft ? idx : maxSlots - 1 - idx;
+                    if (!_columns.TryGetValue(col.Pid, out var cur) || !cur.Alive) continue;
+                    if (idx >= maxSlots)
+                    {
+                        // beyond the alive cap: no slot this frame
+                        slotless ??= new List<RainColumn>();
+                        slotless.Add(cur);
+                        continue;
+                    }
+                    int newSlot = busiestAtLeft ? idx : _gridCols - 1 - idx;
                     idx++;
-                    if (idx > _gridCols) break;
 
                     if (col.PrevSlot < 0)
                     {
@@ -405,6 +439,21 @@ namespace AutoCommand.Matrix
                     if (Cinema) RenderColumnCinema(col);
                     else RenderColumn(col);
                 }
+
+                // A column that lost its slot (died, or beyond the cap):
+                // clear its strip once — in instrument style nothing would
+                // decay it, and the label band needs the explicit wipe in
+                // either style.
+                if (slotless != null)
+                    foreach (var col in slotless)
+                    {
+                        if (col.PrevSlot >= 0)
+                        {
+                            ClearColumnStrip(col, stride);
+                            col.PrevSlot = -1;
+                            col.Slot = -1;
+                        }
+                    }
 
                 _bmp.AddDirtyRect(new Int32Rect(0, 0, _w, _h));
             }
@@ -452,7 +501,10 @@ namespace AutoCommand.Matrix
             for (int c = 0; c < _deco.Length && c < _gridCols; c++)
             {
                 var s = _deco[c];
-                int x = c * _atlas.CellW;
+                // the wall lives exactly where the data does: the alive
+                // columns hugging the docked edge
+                int edge = _cfg.Dock == "left" ? 0 : _gridCols - _deco.Length;
+                int x = (edge + c) * _atlas.CellW;
                 if (x + _atlas.CellW > _w) break;
 
                 if (s.WaitSec >= 0)
@@ -587,6 +639,15 @@ namespace AutoCommand.Matrix
             for (int r = 0; r < ch; r++, d += stride)
                 for (int c = 0; c < cw * 4; c++)
                     d[c] = 0;
+        }
+
+        /// <summary>Wipes a column's full strip (its last drawn grid cell,
+        /// label band included) — for a column that just lost its slot.</summary>
+        private unsafe void ClearColumnStrip(RainColumn col, int stride)
+        {
+            int x = ColumnX(col);
+            if (x < 0) return;
+            ClearCell((byte*)_bmp.BackBuffer, stride, x, 0, _atlas.CellW, _h, _w, _h);
         }
 
         /// <summary>Writes this frame's wake into the backdrop: each cell a
@@ -724,13 +785,15 @@ namespace AutoCommand.Matrix
             if (ReferenceEquals(snap, _consumed)) return;
             _consumed = snap;
 
-            int cap = Math.Min(Math.Max(4, _cfg.MaxColumns), _gridCols);
+            int cap = Math.Min(Math.Max(1, _cfg.MaxColumns), _gridCols);
             var now = DateTime.UtcNow;
             var seen = new HashSet<int>();
+            _alivePidCount = 0;
 
             foreach (var p in snap)
             {
                 seen.Add(p.Pid);
+                if (!p.Exited) _alivePidCount++;
                 if (!_columns.TryGetValue(p.Pid, out var col))
                 {
                     // At cap, a newcomer takes over the stalest idle column.
@@ -761,6 +824,7 @@ namespace AutoCommand.Matrix
                 col.Name = p.Name;
                 col.Blocked = p.Blocked;
                 col.Exited = p.Exited;
+                col.Alive = true;
                 col.TxBytes = p.TxBytes; col.RxBytes = p.RxBytes;
                 col.TxPackets = p.TxPackets; col.RxPackets = p.RxPackets;
                 col.Connections = p.Connections;
@@ -801,7 +865,8 @@ namespace AutoCommand.Matrix
                 var col = _columns[pid];
                 if (seen.Contains(pid)) continue;
                 if (col.MissingSinceUtc == DateTime.MinValue) col.MissingSinceUtc = now;
-                else if ((now - col.MissingSinceUtc).TotalSeconds > 12)
+                col.Alive = false;
+                if ((now - col.MissingSinceUtc).TotalSeconds > 12)
                 {
                     _columns.Remove(pid);
                     _rainClearPending = true;
