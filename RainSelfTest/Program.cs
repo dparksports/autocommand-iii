@@ -63,6 +63,7 @@ namespace RainSelfTest
 
         public RainTabStub()
         {
+            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rainselftest.log");
             var grid = new Grid { Background = new SolidColorBrush(Color.FromRgb(5, 8, 7)) };
             var ambient = new Image();
             var rain = new Image();
@@ -83,6 +84,9 @@ namespace RainSelfTest
                     _cfg.Style = "cinema";   // self-test the movie look
                     _feed = new SynthFeed();
                     _renderer = new MatrixRenderer(ambient, rain, () => _feed.Latest, _cfg);
+                    _renderer.ActiveColumnsChanged += () =>
+                        System.IO.File.AppendAllText(logPath,
+                            $"[{DateTime.Now:HH:mm:ss.fff}] activeCols -> {_renderer.ActiveColumns}\n");
                     _renderer.SetSurfaceSize(ActualWidth, ActualHeight);
                 }
                 ApplyVisibility();
@@ -94,7 +98,6 @@ namespace RainSelfTest
             var diag = new DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render)
                 { Interval = TimeSpan.FromMilliseconds(500) };
             int dumpCount = 0;
-            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rainselftest.log");
             System.IO.File.WriteAllText(logPath, $"=== run {DateTime.Now:HH:mm:ss.fff} ===\n");
             diag.Tick += (s, e) =>
             {

@@ -81,10 +81,10 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="ListColumn" Width="*"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition x:Name="RainColumn" Width="330"/>
+                        <ColumnDefinition x:Name="RainColumn" Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <views:SvchostMonitorView x:Name="SvchostTab" Grid.Column="0"/>
-                    <Border x:Name="RainRail" Grid.Column="1" Width="13"
+                    <Border x:Name="RainRail" Grid.Column="1" Width="18"
                             Background="{DynamicResource SurfaceBrush}"
                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
                         <Grid>
@@ -95,16 +95,16 @@
                             <Button x:Name="ListToggleBtn" Grid.Row="0" Focusable="False" Click="ListToggleBtn_Click"
                                     Background="Transparent" BorderThickness="0"
                                     ToolTip="Hide the process list — rain only">
-                                <TextBlock Text="‹" FontSize="10"
+                                <TextBlock Text="‹" FontSize="13"
                                            Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                                           VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,6"/>
                             </Button>
                             <Button x:Name="RainToggleBtn" Grid.Row="1" Focusable="False" Click="RainToggleBtn_Click"
                                     Background="Transparent" BorderThickness="0"
                                     ToolTip="Hide the Matrix rain">
-                                <TextBlock Text="›" FontSize="10"
+                                <TextBlock Text="›" FontSize="13"
                                            Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                                           VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,6,0,0"/>
                             </Button>
                         </Grid>
                     </Border>

@@ -100,13 +100,12 @@ namespace AutoCommand
         {
             bool list = _paneState != "rain";
             bool rain = _paneState != "grid";
-            ListColumn.Width = list ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            ListColumn.Width = new GridLength(1, GridUnitType.Star);
             SvchostTab.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
-            // rain-only lets the animation own the whole tab; list-only is
-            // the monitor's original full-width layout
-            RainColumn.Width = _paneState == "rain"
-                ? new GridLength(1, GridUnitType.Star)
-                : (rain ? new GridLength(330) : new GridLength(0));
+            // the rain sizes ITSELF to its alive columns (no gap strip);
+            // the Auto column simply follows — in rain-only mode the list
+            // column absorbs the free space and the rain hugs the edge
+            RainColumn.Width = rain ? GridLength.Auto : new GridLength(0);
             MatrixRainTab.Visibility = rain ? Visibility.Visible : Visibility.Collapsed;
             // a chevron disables exactly when its press would hide the
             // only visible pane

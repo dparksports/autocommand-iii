@@ -235,6 +235,7 @@ namespace AutoCommand.Matrix
             // the deco wall is sized to the ALIVE column count every frame
             // (see Frame) — not to the grid width: the pane carries exactly
             // as many columns as there are alive processes
+            UpdateActiveColumns();
             RebuildAmbientGrid();
         }
 
@@ -303,6 +304,27 @@ namespace AutoCommand.Matrix
         public double DebugBudget;
         private double _fpsEma;
 
+        /// <summary>The alive, capped column count — the host panel sizes
+        /// itself to exactly this many cells, so the pane carries no gap
+        /// strip beside the rain.</summary>
+        public int ActiveColumns => _activeCols;
+
+        /// <summary>One cell's width in DIP (the renderer works in device
+        /// pixels; WPF layout wants DIP).</summary>
+        public double CellWidthDip => _atlas == null ? 0 : _atlas.CellW / DpiScale;
+
+        /// <summary>Raised on the UI thread when the alive-column count or
+        /// the cell metrics change.</summary>
+        public event Action ActiveColumnsChanged;
+
+        private void UpdateActiveColumns()
+        {
+            int n = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
+            if (n == _activeCols) return;
+            _activeCols = n;
+            ActiveColumnsChanged?.Invoke();
+        }
+
         public void DumpRainPng(string path)
         {
             if (_bmp == null) return;
@@ -363,16 +385,12 @@ namespace AutoCommand.Matrix
                 // CINEMA: the movie's body — fade the whole rain layer (the
                 // silky trail decay), then keep every column's decorative
                 // stream falling. The data columns draw on top after this.
+                UpdateActiveColumns();
                 if (Cinema)
                 {
                     FadeCinema(dt);
-                    _activeCols = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
                     SyncDecoWall();
                     StepAndDrawDeco(dt, stride);
-                }
-                else
-                {
-                    _activeCols = Math.Min(_alivePidCount, Math.Min(_cfg.MaxColumns, _gridCols));
                 }
 
                 // Re-rank only after REAL events (traffic, attempts,
