@@ -42,15 +42,18 @@ jobs:
         shell: pwsh
         run: |
           # 2026.10.30 dead-code sweep removed the BITS/PyTrace/DnsFeed
-          # families and their self-tests; BridgeSelfTest and RainSelfTest
-          # joined the strict set with their features.
+          # families and their self-tests. RainSelfTest is NOT in this list
+          # and must not be: it is a manual visual harness (a WPF window
+          # with no exit path and no pass/fail code — the regression signal
+          # is a human reading the fps title), so as a gate it hung every
+          # run that reached it (both v2026.10.30.17-era runs sat
+          # 'in_progress' 30+ minutes). Run it at the desk; the rest gate.
           $suites = @(
             'NetWatchSelfTest',
             'OneSettingsCadenceSelfTest',
             'ContainSelfTest',
             'ProxyInstallSelfTest',
-            'BridgeSelfTest',
-            'RainSelfTest'
+            'BridgeSelfTest'
           )
           foreach ($s in $suites) {
             Write-Host "== $s =="

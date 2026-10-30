@@ -151,7 +151,6 @@ Check("keep-wnf accepts the original WNF count",
 // (the event namespace is exact-match; a typo'd URI parsed nothing for every
 // record once — this pins it)
 string ev100 = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-TaskScheduler'/><EventID>100</EventID><TimeCreated SystemTime='2026-10-15T02:42:15.7320996Z'/></System><EventData Name='TaskStartEvent'><Data Name='TaskName'>\Microsoft\Windows\Flighting\OneSettings\RefreshCache</Data><Data Name='UserContext'>NT AUTHORITY\SYSTEM</Data><Data Name='InstanceId'>{95d24c30-3a57-481e-b82d-318e657c78df}</Data></EventData></Event>""";
-string ev107 = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-TaskScheduler'/><EventID>107</EventID><TimeCreated SystemTime='2026-10-15T02:42:15.7289866Z'/></System><EventData Name='TimeTriggerEvent'><Data Name='TaskName'>\Microsoft\Windows\Flighting\OneSettings\RefreshCache</Data><Data Name='InstanceId'>{95d24c30-3a57-481e-b82d-318e657c78df}</Data></EventData></Event>""";
 string ev201 = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System><Provider Name='Microsoft-Windows-TaskScheduler'/><EventID>201</EventID><TimeCreated SystemTime='2026-10-15T02:42:16.6670000Z'/></System><EventData Name='ActionCompletionEvent'><Data Name='TaskName'>\Microsoft\Windows\Flighting\OneSettings\RefreshCache</Data><Data Name='ActionName'>Task Scheduler service started Task Engine process</Data><Data Name='TaskInstanceId'>{95d24c30-3a57-481e-b82d-318e657c78df}</Data><Data Name='ResultCode'>0</Data></EventData></Event>""";
 
 var f100 = RunHistory.ParseFields(ev100);
@@ -183,59 +182,9 @@ Check("verdict blames servicing when WNF triggers are gone", compRev.Verdict.Con
 var compRevWnf = RunHistory.Compute(heavyRuns, TimeSpan.FromHours(24), cadenceIsSaved: true, days: 7, wnfTriggersPresent: true);
 Check("same excess with WNF triggers installed blames them", compRevWnf.Verdict.Contains("WNF"), compRevWnf.Verdict);
 
-// --- external-start correlation (live alert state machine) -----------------
-DateTime t0 = DateTime.UtcNow;
-var corr = new ExternalStartCorrelator();
-
-// trigger-fired: 107 then 100, deadline passes → NOT external
-corr.FeedScheduler(107, "inst-trig", t0, 0);
-corr.FeedScheduler(100, "inst-trig", t0.AddMilliseconds(4), 0);
-corr.FeedScheduler(129, "inst-trig", t0.AddMilliseconds(10), 4242);
-var confirmedTrig = corr.FeedDeadline(t0 + ExternalStartCorrelator.Deadline + TimeSpan.FromSeconds(1));
-Check("trigger-fired launch is not an external start", confirmedTrig.Count == 0);
-
-// external: 100 (+129) with no trigger → confirmed exactly once at deadline
-corr.FeedScheduler(100, "inst-ext", t0.AddSeconds(10), 0);
-corr.FeedScheduler(129, "inst-ext", t0.AddSeconds(10).AddMilliseconds(2), 5150);
-var first = corr.FeedDeadline(t0.AddSeconds(10) + ExternalStartCorrelator.Deadline + TimeSpan.FromSeconds(1));
-var again = corr.FeedDeadline(t0.AddSeconds(30));
-Check("100-without-trigger confirmed as external start",
-      first.Count == 1 && first[0].ConfirmedExternal && first[0].Pid == 5150);
-Check("external confirmation fires exactly once", again.Count == 0);
-
-// out-of-order: 100 arrives before its 107 — deadline, not arrival order, decides
-corr.FeedScheduler(100, "inst-late", t0.AddSeconds(40), 0);
-corr.FeedScheduler(107, "inst-late", t0.AddSeconds(40).AddMilliseconds(30), 0);
-var lateConfirm = corr.FeedDeadline(t0.AddSeconds(80));
-Check("107 arriving after 100 still counts as a trigger", lateConfirm.Count == 0);
-
-// WNF (108) and logon (119) are triggers too
-corr.FeedScheduler(100, "inst-wnf", t0.AddSeconds(90), 0);
-corr.FeedScheduler(108, "inst-wnf", t0.AddSeconds(90).AddMilliseconds(5), 0);
-corr.FeedScheduler(100, "inst-logon", t0.AddSeconds(95), 0);
-corr.FeedScheduler(119, "inst-logon", t0.AddSeconds(95).AddMilliseconds(5), 0);
-var trigConfirm = corr.FeedDeadline(t0.AddSeconds(120));
-Check("108/119 launches are triggers, not external starts", trigConfirm.Count == 0);
-
-// fetch evidence: Sysmon connect joins by pid, exit stops accrual
-corr.FeedSysmonConnect(5150, "13.107.4.50:443", t0.AddSeconds(12));
-corr.FeedSysmonConnect(5150, "20.42.6.54:443", t0.AddSeconds(13));
-corr.FeedSysmonExit(5150, t0.AddSeconds(14));
-corr.FeedSysmonConnect(5150, "10.0.0.9:9999", t0.AddSeconds(20)); // pid reused after exit
-var extInst = corr.Snapshot().First(i => i.InstanceId == "inst-ext");
-Check("fetch evidence joins by pid", extInst.Fetches.Count == 2 && extInst.Fetches[0].Destination == "13.107.4.50:443",
-      string.Join(", ", extInst.Fetches.Select(f => f.Destination)));
-Check("exit stamps ExitedUtc and stops accrual", extInst.ExitedUtc == t0.AddSeconds(14) && extInst.Fetches.Count == 2);
-
-// unknown pid fetches are ignored (other processes' traffic)
-corr.FeedSysmonConnect(9999, "1.2.3.4:80", t0.AddSeconds(25));
-Check("unrelated pid traffic is ignored", corr.Snapshot().First(i => i.InstanceId == "inst-ext").Fetches.Count == 2);
-
-// bounded history
-var corr2 = new ExternalStartCorrelator { MaxInstances = 5 };
-for (int k = 0; k < 9; k++) corr2.FeedScheduler(100, $"inst-{k}", t0.AddMinutes(k), 0);
-Check("instance history is bounded", corr2.Snapshot().Count == 5 && corr2.Snapshot().All(i => int.Parse(i.InstanceId.Split('-')[1]) >= 4),
-      corr2.Snapshot().Count.ToString());
+// (the external-start correlation section left with ExternalStartMonitor —
+// the 2026.10.30 dead-module sweep removed the feature as instantiated
+// nowhere; these checks exercised only that removed type)
 
 Console.WriteLine();
 Console.WriteLine($"{pass} passed, {fail} failed");
