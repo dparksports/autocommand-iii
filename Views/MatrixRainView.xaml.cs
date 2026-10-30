@@ -26,8 +26,11 @@ namespace AutoCommand.Views
         private bool _attaching;
         private bool _diagVisible = true;
 
+        // Render priority, not Background: under a loaded machine Background
+        // work starves indefinitely and the strip freezes mid-sentence even
+        // while the rain itself is fine — it costs two string writes/500ms.
         private readonly System.Windows.Threading.DispatcherTimer _diagTimer =
-            new(System.Windows.Threading.DispatcherPriority.Background)
+            new(System.Windows.Threading.DispatcherPriority.Render)
             {
                 Interval = TimeSpan.FromMilliseconds(500)
             };
@@ -52,7 +55,16 @@ namespace AutoCommand.Views
         /// how the first cut hid its failure.</summary>
         private void Attach()
         {
-            if (_renderer != null || _attaching) return;
+            if (_renderer != null)
+            {
+                // Re-connected to the tree (every return to the tab after a
+                // WPF TabControl unload): Unloaded stopped the renderer, and
+                // IsVisibleChanged already fired while IsLoaded was still
+                // false — so THIS is the only hook left that can restart it.
+                ApplyVisibility();
+                return;
+            }
+            if (_attaching) return;
             _attaching = true;
 
             var tracked = SvchostMonitorView.Current?.TrackedTable;

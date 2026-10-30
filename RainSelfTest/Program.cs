@@ -71,24 +71,37 @@ namespace RainSelfTest
             grid.Children.Add(_diag);
             Content = grid;
 
-            // the exact wiring the real Rain tab uses
+            // the exact wiring the real Rain tab uses — INCLUDING the
+            // re-attach guard: a re-Load (every tab return) must reuse the
+            // existing renderer and restart it via ApplyVisibility, never
+            // early-return and leave it stopped
             Loaded += (s, e) =>
             {
-                _cfg = MatrixRainConfig.LoadOrDefault();
-                _cfg.Style = "cinema";   // self-test the movie look
-                _feed = new SynthFeed();
-                _renderer = new MatrixRenderer(ambient, rain, () => _feed.Latest, _cfg);
-                _renderer.SetSurfaceSize(ActualWidth, ActualHeight);
+                if (_renderer == null)
+                {
+                    _cfg = MatrixRainConfig.LoadOrDefault();
+                    _cfg.Style = "cinema";   // self-test the movie look
+                    _feed = new SynthFeed();
+                    _renderer = new MatrixRenderer(ambient, rain, () => _feed.Latest, _cfg);
+                    _renderer.SetSurfaceSize(ActualWidth, ActualHeight);
+                }
                 ApplyVisibility();
             };
             IsVisibleChanged += (s, e) => ApplyVisibility();
             SizeChanged += (s, e) => _renderer?.SetSurfaceSize(ActualWidth, ActualHeight);
             Unloaded += (s, e) => { _renderer?.Stop(); _feed?.Stop(); };
 
-            var diag = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            var diag = new DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render)
+                { Interval = TimeSpan.FromMilliseconds(500) };
             int dumpCount = 0;
+            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rainselftest.log");
+            System.IO.File.WriteAllText(logPath, $"=== run {DateTime.Now:HH:mm:ss.fff} ===\n");
             diag.Tick += (s, e) =>
             {
+                var state = _renderer == null
+                    ? "attaching (renderer null)"
+                    : $"cols={_renderer.LiveColumns} draws={_renderer.DebugDraws} fps={_renderer.LastFps:0} visible={IsVisible} loaded={IsLoaded} inTree={(Window.GetWindow(this) != null)}";
+                System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {state}\n");
                 if (_renderer == null) { _diag.Text = "attaching..."; return; }
                 _diag.Text = $"synthetic feed · {_renderer.LiveColumns} columns · {_renderer.LastFps:0} fps";
                 if (Window.GetWindow(this) is Window w)
@@ -137,9 +150,29 @@ namespace RainSelfTest
                 Content = tabs
             };
 
+            var log = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "rainselftest.log");
+            app.DispatcherUnhandledException += (s, e2) =>
+            {
+                System.IO.File.AppendAllText(log, $"!!! DISPATCHER EX: {e2.Exception}\n");
+                e2.Handled = true;
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, e2) =>
+                System.IO.File.AppendAllText(log, $"!!! APPDOMAIN EX: {e2.ExceptionObject}\n");
+            win.Loaded += (s, e2) => System.IO.File.AppendAllText(log, $"[win] loaded\n");
+
             var select = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
             select.Tick += (s, e) => { select.Stop(); tabs.SelectedIndex = 1; };
             select.Start();
+
+            // The real tab strip sends the user AWAY and back — every return
+            // must re-start the renderer (Unloaded stopped it). The title's
+            // fps readout after the round-trip is the regression signal.
+            var away = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            away.Tick += (s, e) => { away.Stop(); tabs.SelectedIndex = 0; };
+            away.Start();
+            var back = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            back.Tick += (s, e) => { back.Stop(); tabs.SelectedIndex = 1; };
+            back.Start();
 
             app.Run(win);
         }
