@@ -14,6 +14,12 @@
     <!-- Suppress duplicate-attribute CS0579 from the WPF XAML designer _wpftmp project -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <!-- Keep the bridge self-test's obj\ auto-sources out of the default
+         glob: with this many Compile Remove patterns the BridgeSelfTest\**
+         remove does not reliably match its obj\ subtree (its generated
+         AssemblyInfo.cs collides with GeneratedVersionInfo.cs, CS0579),
+         while DefaultItemExcludes is applied at glob time and always does. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);BridgeSelfTest\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -160,6 +166,10 @@
     <!-- Rain self-test: asInvoker WPF harness over the rain engine with a
          synthetic feed — own Main(), same glob reason as every side project -->
     <Compile Remove="RainSelfTest\**" />
+    <!-- Bridge self-test: wire-protocol harness over the F# bridge engine
+         (session file ownership, one-dialect errors, no bare closes,
+         escaping) — own Main(), same glob reason as every side project -->
+    <Compile Remove="BridgeSelfTest\**" />
   </ItemGroup>
 
   <!-- Filter out Linux .so native binaries when publishing for Windows win-x64 -->
