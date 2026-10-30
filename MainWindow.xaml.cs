@@ -27,6 +27,42 @@ namespace AutoCommand
         private static string AppVersion =>
             FileVersionInfo.GetVersionInfo(Environment.ProcessPath).ProductVersion ?? "unknown";
 
+        // ── hamburger: sidebar collapse ──────────────────────────────────
+        // The burger item at the top of the strip is a fake tab — its
+        // selection is intercepted here to toggle IsPaneCollapsed (labels
+        // and group headers hide; the strip narrows to its icons) and the
+        // previously selected tab is restored. NavPaneLabel/NavGroupLabel
+        // styles in MainWindow.xaml bind their Visibility to this property.
+
+        public static readonly DependencyProperty IsPaneCollapsedProperty =
+            DependencyProperty.Register(nameof(IsPaneCollapsed), typeof(bool), typeof(MainWindow),
+                new PropertyMetadata(false));
+
+        public bool IsPaneCollapsed
+        {
+            get => (bool)GetValue(IsPaneCollapsedProperty);
+            set => SetValue(IsPaneCollapsedProperty, value);
+        }
+
+        private object _lastContentItem;
+        private bool _reselecting;
+
+        private void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_reselecting) return;
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] == NavPaneToggleItem)
+            {
+                IsPaneCollapsed = !IsPaneCollapsed;
+                _reselecting = true;
+                MainTabControl.SelectedItem = _lastContentItem ?? ProcessMonitorNavItem;
+                _reselecting = false;
+            }
+            else if (e.AddedItems.Count > 0)
+            {
+                _lastContentItem = e.AddedItems[0];
+            }
+        }
+
         public MainWindow()
         {
             InitializeComponent();

@@ -2,10 +2,33 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:AutoCommand.Views"
+        x:Name="RootWindow"
         Title="Auto-Command" Height="750" Width="1200"
         Icon="app_icon.ico"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <!-- Pane collapse (the hamburger): nav labels and group headers hide
+             so the sidebar narrows to its icons — Shields Up's collapsed
+             NavigationView. Bound to RootWindow.IsPaneCollapsed, toggled by
+             the burger item at the top of the strip. -->
+        <Style x:Key="NavPaneLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsPaneCollapsed, ElementName=RootWindow}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="NavGroupLabel" TargetType="TextBlock">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsPaneCollapsed, ElementName=RootWindow}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -17,13 +40,26 @@
              the machine is doing), CONTAIN (blocking & defenses), SYSTEM
              (everything configurational). Group headers are non-selectable
              TabItems; entries are single-line so all 15 fit without
-             scrolling. SelectedIndex=1 skips the WATCH header explicitly. -->
-        <TabControl x:Name="MainTabControl" Grid.Row="0" TabStripPlacement="Left" SelectedIndex="1">
+             scrolling. The burger item at the very top is a fake tab: its
+             selection is intercepted in code-behind to toggle the pane
+             collapse instead of navigating. SelectedIndex=2 skips the burger
+             and the WATCH header explicitly. -->
+        <TabControl x:Name="MainTabControl" Grid.Row="0" TabStripPlacement="Left" SelectedIndex="2"
+                    SelectionChanged="MainTabControl_SelectionChanged">
+
+            <!-- hamburger: collapses the sidebar to icons-only and back -->
+            <TabItem x:Name="NavPaneToggleItem" ToolTip="Show / hide menu labels">
+                <TabItem.Header>
+                    <TextBlock Text="☰" FontSize="16" FontWeight="Bold" Margin="4,0,0,0"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </TabItem.Header>
+            </TabItem>
 
             <!-- ═══ WATCH ═══ -->
             <TabItem x:Name="WatchHeaderItem" IsEnabled="False" Focusable="False">
                 <TabItem.Header>
                     <TextBlock x:Name="WatchHeaderText" Text="WATCH" FontSize="10" FontWeight="Bold"
+                               Style="{StaticResource NavGroupLabel}"
                                Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,0,0,2"
                                ToolTip="Feeds that show what this machine is running and where it connects."/>
                 </TabItem.Header>
@@ -32,7 +68,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🔍" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Process Monitor" VerticalAlignment="Center"/>
+                        <TextBlock Text="Process Monitor" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:SvchostMonitorView x:Name="SvchostTab"/>
@@ -41,7 +77,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🌧" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Rain" VerticalAlignment="Center" ToolTip="The process monitor as Matrix rain — same live data, for those who'd rather watch it."/>
+                        <TextBlock Text="Rain" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center" ToolTip="The process monitor as Matrix rain — same live data, for those who'd rather watch it."/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:MatrixRainView x:Name="MatrixRainTab"/>
@@ -51,6 +87,7 @@
             <TabItem IsEnabled="False" Focusable="False">
                 <TabItem.Header>
                     <TextBlock Text="CONTAIN" FontSize="10" FontWeight="Bold"
+                               Style="{StaticResource NavGroupLabel}"
                                Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,10,0,2"
                                ToolTip="Blocking, sinkholing and defenses — actions that stop things."/>
                 </TabItem.Header>
@@ -59,7 +96,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🛡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Firewall" VerticalAlignment="Center"/>
+                        <TextBlock Text="Firewall" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:FirewallSettingsView x:Name="FirewallTab"/>
@@ -68,7 +105,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="⛔" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Blocks" VerticalAlignment="Center"/>
+                        <TextBlock Text="Blocks" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:BlocksView x:Name="BlocksTab"/>
@@ -77,7 +114,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🧾" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Audit" VerticalAlignment="Center"/>
+                        <TextBlock Text="Audit" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:AuditView x:Name="AuditTab"/>
@@ -87,6 +124,7 @@
             <TabItem x:Name="SystemHeaderItem" IsEnabled="False" Focusable="False">
                 <TabItem.Header>
                     <TextBlock x:Name="SystemHeaderText" Text="SYSTEM" FontSize="10" FontWeight="Bold"
+                               Style="{StaticResource NavGroupLabel}"
                                Foreground="{DynamicResource TextSecondaryBrush}" Margin="2,10,0,2"
                                ToolTip="AI access, privacy, Windows telemetry, Sysmon health and app settings."/>
                 </TabItem.Header>
@@ -95,7 +133,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🤖" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Be My Guest" VerticalAlignment="Center"/>
+                        <TextBlock Text="Be My Guest" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:BeMyGuestView x:Name="BeMyGuestTab"/>
@@ -104,7 +142,7 @@
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="⚙" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="Settings" VerticalAlignment="Center"/>
+                        <TextBlock Text="Settings" Style="{StaticResource NavPaneLabel}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
                 <views:SettingsView x:Name="SettingsTab"/>

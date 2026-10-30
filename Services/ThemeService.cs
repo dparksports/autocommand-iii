@@ -95,9 +95,12 @@ namespace AutoCommand.Services
 
             if (light)
             {
-                res["PrimaryGradientBrush"] = MakeGradient("#007AFF", "#0062CC");
-                res["DangerGradientBrush"] = MakeGradient("#D70015", "#B40011");
-                res["TabIndicatorGradientBrush"] = MakeGradient("#007AFF", "#3E86D6");
+                // Shields Up buttons are FLAT accent fills — the diagonal
+                // two-blue gradient read heavy on the light surfaces (and
+                // covered primary buttons and selected combo items alike)
+                res["PrimaryGradientBrush"] = MakeGradient("#007AFF", "#007AFF");
+                res["DangerGradientBrush"] = MakeGradient("#D70015", "#D70015");
+                res["TabIndicatorGradientBrush"] = MakeGradient("#007AFF", "#007AFF");
             }
             else
             {
