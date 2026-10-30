@@ -1,4 +1,4 @@
-// F# port of Core\Services\SiteVerdictService.cs (AutoScope.Services →
+﻿// F# port of Core\Services\SiteVerdictService.cs (AutoScope.Services →
 // AutoCommand.Engines.Diagnosis). Faithful by contract: same VerdictKind
 // members and values, same rule order, same thresholds, and byte-identical
 // headline / next-step / evidence strings (the self-test asserts them).
@@ -7,6 +7,7 @@
 namespace AutoCommand.Engines.Diagnosis
 
 open System
+open AutoCommand.Engines.Core
 
 type VerdictKind =
     | Blocked = 0               // nothing reaches the site from this PC
