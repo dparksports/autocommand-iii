@@ -11,7 +11,7 @@ namespace AutoCommand.Views
 {
     /// <summary>
     /// Tier-3 consent: shown by the AI-access bridge before any mutating tool
-    /// runs (block IP, kill process, disable task). The answer travels back
+    /// runs (the gate pair). The answer travels back
     /// to the assistant as a bare allowed/denied; "always for this session"
     /// grants stay in the bridge's memory and die with the session.
     /// </summary>
@@ -25,6 +25,8 @@ namespace AutoCommand.Views
             InitializeComponent();
             HeadText.Text = $"An AI assistant asks to run: {tool}";
             DetailText.Text = detail;
+            if (tool == "open_gate" || tool == "close_gate")
+                AlwaysCheck.Content = "Allow gates for THIS target for the rest of the session — other targets still ask";
             // Non-modal timing: the bridge waits on this dialog for up to 90 s,
             // then answers 'denied (timeout)' on its own.
         }

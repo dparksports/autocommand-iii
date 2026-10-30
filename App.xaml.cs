@@ -188,6 +188,7 @@ namespace AutoCommand
 
             // Block gates: close anything that expired while the app was
             // down, then keep watch — an open gate is a promise to re-block
+            try { System.IO.File.Delete(AgentPrefPath("mutating_pref.txt")); } catch { }
             _ = Agent.Core.BlockGateService.Instance.ReconcileOnStartupAsync();
             // every gate close reaches the bridge's activity log — the
             // agent-facing record (Be My Guest tab + offline agents), so a
@@ -234,10 +235,10 @@ namespace AutoCommand
             if (AgentAutostartPrefOn())
             {
                 var (ok, message) = AgentBridgeService.Instance.Start(
-                    allowMutating: AgentMutatingPrefOn());
+                    allowMutating: true);   // the gate pair - each request confirms in the app
                 if (ok)
                     AgentBridgeService.Instance.LogActivity("session", "started (auto)",
-                        $"mutating {(AgentMutatingPrefOn() ? "on" : "off")}");
+                        "gate requests ask per request");
             }
         }
 
@@ -247,12 +248,6 @@ namespace AutoCommand
         private static bool AgentAutostartPrefOn()
         {
             try { return System.IO.File.ReadAllText(AgentPrefPath("autostart_pref.txt")).Trim() == "on"; }
-            catch { return false; }
-        }
-
-        private static bool AgentMutatingPrefOn()
-        {
-            try { return System.IO.File.ReadAllText(AgentPrefPath("mutating_pref.txt")).Trim() == "on"; }
             catch { return false; }
         }
 

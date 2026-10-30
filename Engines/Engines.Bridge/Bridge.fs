@@ -476,8 +476,8 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
             elif tool.Mutating && not mutatingAllowed then
                 return ($"Tool '{name}' exists, but this session has mutating tools OFF. " +
                         "Enable 'Allow mutating tools' in AutoCommand's AI access settings and restart the session.", true)
-            elif tool.Mutating && not (this.SessionGranted(name)) then
-                let allowed, note = this.RequestConfirmation(name, tool.ConfirmDetail(args.ToJsonString()))
+            elif tool.Mutating && not (this.SessionGranted(AgentBridgeService.GrantKey(name, args))) then
+                let allowed, note = this.RequestConfirmation(name, AgentBridgeService.GrantKey(name, args), tool.ConfirmDetail(args.ToJsonString()))
                 if not allowed then
                     return ($"User denied '{name}'" + (if note.Length > 0 then $" — {note}" else "") + ".", true)
                 else
@@ -488,17 +488,29 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                 return (output, false)
         }
 
-    member private _.SessionGranted (toolName: string) =
-        lock sessionToolsLock (fun () -> sessionAllowedTools.Contains(toolName))
+    member private _.SessionGranted (grantKey: string) =
+        lock sessionToolsLock (fun () -> sessionAllowedTools.Contains(grantKey))
+
+    /// <summary>What a "for this session" grant actually covers. Gate tools
+    /// grant PER TARGET — "allow gates for this address/host" never widens
+    /// to other blocked services; every new target asks again. Other tools
+    /// (none today beyond the gate pair) would grant per tool.</summary>
+    static member private GrantKey (toolName: string, args: JsonObject) : string =
+        if toolName = "open_gate" || toolName = "close_gate" then
+            match args["target"] with
+            | null -> toolName
+            | t -> toolName + "|" + t.ToString().Trim().ToLowerInvariant()
+        else toolName
 
     // ── per-action confirmation (Tier 3) ──────────────────────────────
 
     /// <summary>
     /// Asks the user at the app's UI. Runs on the dispatcher; returns
     /// after the user answers or the timeout elapses (deny). "Always for
-    /// this session" grants are remembered per tool until Stop().
+    /// this session" grants are remembered per tool until Stop() - and for
+    /// the gate tools, per target (other targets keep asking).
     /// </summary>
-    member _.RequestConfirmation (toolName: string, detail: string) : bool * string =
+    member _.RequestConfirmation (toolName: string, grantKey: string, detail: string) : bool * string =
         if not mutatingAllowed then (false, "mutating tools are disabled for this session")
         else
             let uiInstance = AgentBridgeService.Ui
@@ -531,8 +543,10 @@ type AgentBridgeService (identity: AppIdentity, tools: IAgentTools,
                 else
                     let allowed, always, note = tcs.Task.Result
                     if allowed && always then
-                        lock sessionToolsLock (fun () -> sessionAllowedTools.Add(toolName) |> ignore)
-                        this.LogActivity("session", "grant", $"{toolName} allowed for the rest of the session")
+                        lock sessionToolsLock (fun () -> sessionAllowedTools.Add(grantKey) |> ignore)
+                        this.LogActivity("session", "grant",
+                            $"{grantKey} allowed for the rest of the session" +
+                            (if grantKey <> toolName then " (this target only)" else ""))
                     (allowed, note)
 
     // ── activity log + feed (Phase 1) ─────────────────────────────────

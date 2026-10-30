@@ -31,13 +31,11 @@ namespace AutoCommand.Views
             // AI access: mutating + autostart + wake preferences + live session status
             try
             {
-                AgentMutatingCheck.IsChecked = PrefOn(MutatingPrefPath);
                 AgentAutostartCheck.IsChecked = PrefOn(AutostartPrefPath);
                 AgentWakeCheck.IsChecked = PrefOn(WakePrefPath);
             }
             catch
             {
-                AgentMutatingCheck.IsChecked = false;
                 AgentAutostartCheck.IsChecked = false;
                 AgentWakeCheck.IsChecked = false;
             }
@@ -51,10 +49,6 @@ namespace AutoCommand.Views
 
         private readonly System.Windows.Threading.DispatcherTimer _agentRefresh =
             new() { Interval = TimeSpan.FromSeconds(2) };
-
-        private static string MutatingPrefPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "AutoCommand", "agent", "mutating_pref.txt");
 
         private static string AutostartPrefPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -122,7 +116,9 @@ namespace AutoCommand.Views
                 "Be My Guest — consent", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
 
-            var (ok, message) = AgentBridgeService.Instance.Start(AgentMutatingCheck.IsChecked == true);
+            // gates are always offered; every request confirms in the app -
+            // there is no session-wide mutating stance to configure anymore
+            var (ok, message) = AgentBridgeService.Instance.Start(allowMutating: true);
             if (!ok) MessageBox.Show(message, "Be My Guest", MessageBoxButton.OK, MessageBoxImage.Warning);
             RefreshAgentUi();
         }
@@ -131,22 +127,6 @@ namespace AutoCommand.Views
         {
             AgentBridgeService.Instance.Stop();
             RefreshAgentUi();
-        }
-
-        private void AgentMutatingCheck_Changed(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(MutatingPrefPath));
-                File.WriteAllText(MutatingPrefPath, AgentMutatingCheck.IsChecked == true ? "on" : "off");
-            }
-            catch { /* persistence best-effort */ }
-
-            // a running session keeps its launch-time setting; say so plainly
-            if (AgentBridgeService.Instance.IsRunning)
-                MessageBox.Show(
-                    "Takes effect for NEW sessions. Stop and restart the session to apply it now.",
-                    "Be My Guest", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void AgentAutostartCheck_Changed(object sender, RoutedEventArgs e)
