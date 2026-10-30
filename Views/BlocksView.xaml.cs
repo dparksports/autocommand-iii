@@ -19,12 +19,12 @@ namespace AutoCommand.Views
 
     public sealed class BlockRowVm
     {
-        public BlockRecord Record;
-        public bool HasRules;
-        public bool RulesEnabled;      // any enabled rule → on
-        public bool RulesStale;        // rule(s) point at a path that no longer exists on disk
-        public int RulesCount;         // rules the firewall holds for this target
-        public int EnabledCount;       // how many of them are enabled (partial when 0 < n < RulesCount)
+        public BlockRecord Record { get; set; }
+        public bool HasRules { get; set; }
+        public bool RulesEnabled { get; set; }  // any enabled rule → on
+        public bool RulesStale { get; set; }  // rule(s) point at a path that no longer exists on disk
+        public int RulesCount { get; set; }  // rules the firewall holds for this target
+        public int EnabledCount { get; set; }  // how many of them are enabled (partial when 0 < n < RulesCount)
         public string StatusGlyph => !HasRules ? "⚠" : RulesStale ? "🕳" : !RulesEnabled ? "⏸"
             : EnabledCount < RulesCount ? "◐" : "⛔";
         public string StatusToolTip => !HasRules
@@ -40,18 +40,18 @@ namespace AutoCommand.Views
 
         /// <summary>Why blocking is off, at a glance: "3d · Blocks tab".
         /// Null when no pause event/history is known.</summary>
-        public string PausedShort;
-        public string PausedInfoToolTip;
+        public string PausedShort { get; set; }
+        public string PausedInfoToolTip { get; set; }
 
         public string Target => Record.IsIp ? Record.Key
             : System.IO.Path.GetFileName(Record.Key);
-        public string TargetToolTip => Record.Key;
+        public string TargetToolTip  => Record.Key;
 
         // ── restore basket (blocking-OFF rows only) ──
-        public bool IsSelected;
-        public bool CanSelect;         // blocking OFF rows only — nothing to restore otherwise
-        public string SelectionKey => Record.Kind + ":" + Record.Key;
-        public string SelectionToolTip => "Add to the restore basket — blocking is OFF for this target";
+        public bool IsSelected { get; set; }
+        public bool CanSelect { get; set; }  // blocking OFF rows only — nothing to restore otherwise
+        public string SelectionKey  => Record.Kind + ":" + Record.Key;
+        public string SelectionToolTip  => "Add to the restore basket — blocking is OFF for this target";
 
         /// <summary>The service that made the blocked connection — the row's
         /// own answer to "which network service did I block?", independent of
@@ -80,50 +80,50 @@ namespace AutoCommand.Views
                     : $"Service/exe identity: {key} (recovered via {Record.Attrib})";
             }
         }
-        public string ClassDisplay => Record.IsIp ? Record.ClassAtBlock : Record.ClassAtBlock;
-        public Brush ClassBrush;
+        public string ClassDisplay  => Record.IsIp ? Record.ClassAtBlock : Record.ClassAtBlock;
+        public Brush ClassBrush { get; set; }
         public string ClassToolTip => Record.IsIp
             ? $"Ownership classification captured at block time:\n{Record.ClassAtBlock}"
             : $"Target type: {Record.ClassAtBlock}";
 
-        public string CreatedDisplay => Record.CreatedUtc.ToLocalTime().ToString("MMM d HH:mm");
+        public string CreatedDisplay  => Record.CreatedUtc.ToLocalTime().ToString("MMM d HH:mm");
         public string CreatedToolTip => $"Blocked {Record.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss local}\n" +
             $"({DateTime.UtcNow - Record.CreatedUtc:dd\\d\\ hh\\h\\ mm\\m} ago) · origin: {Record.Origin}\n" +
             $"identity: {(Record.Attrib == "none" ? "unresolved" : Record.Attrib)}";
 
-        public string LastTraffic = "…";
-        public string LastTrafficToolTip = "Resolving from live monitor and Sysmon archive…";
-        public Brush LastTrafficBrush;
+        public string LastTraffic { get; set; } = "…";
+        public string LastTrafficToolTip { get; set; } = "Resolving from live monitor and Sysmon archive…";
+        public Brush LastTrafficBrush { get; set; }
         /// <summary>Newest attempt time (live or archived) — the Restore
         /// guide's ranking signal; null when no traffic was ever found.</summary>
-        public DateTime? LastTrafficUtc;
+        public DateTime? LastTrafficUtc { get; set; }
 
         /// <summary>Containment proof — the raw verdict the category summary
         /// counts ("leak" | "stale-flow" | "contained" | "quiet" | "paused"
         /// | "—" when there is nothing to contain).</summary>
-        public string ContainmentVerdict = "…";
-        public string Containment = "…";
-        public string ContainmentToolTip = "Computing the containment join…";
-        public Brush ContainmentBrush;
+        public string ContainmentVerdict { get; set; } = "…";
+        public string Containment { get; set; } = "…";
+        public string ContainmentToolTip { get; set; } = "Computing the containment join…";
+        public Brush ContainmentBrush { get; set; }
 
-        public string RowActionLabel => RulesEnabled ? "Stop blocking" : "Restore blocking";
+        public string RowActionLabel  => RulesEnabled ? "Stop blocking" : "Restore blocking";
     }
 
     public sealed class BlockGroupVm
     {
-        public string ServiceKey;
-        public string DisplayName;
-        public string Description;
-        public ServiceImpact Impact;
-        public string Summary;          // "6 blocks · 4 Akamai · 2 Azure · ⚠ 1 LEAKING"
+        public string ServiceKey { get; set; }
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public ServiceImpact Impact { get; set; }
+        public string Summary { get; set; }  // "6 blocks · 4 Akamai · 2 Azure · ⚠ 1 LEAKING"
 
         /// <summary>Every row of the category, unfiltered — the truth counts
         /// and bulk actions scope over.</summary>
-        public List<BlockRowVm> AllRows = new();
+        public List<BlockRowVm> AllRows { get; set; } = new();
 
-        public int ActiveCount;        // rules present and enabled (blocking ON)
-        public int PausedCount;        // rules present, all disabled (blocking OFF)
-        public int NoRulesCount;       // no rules on disk at all
+        public int ActiveCount { get; set; }  // rules present and enabled (blocking ON)
+        public int PausedCount { get; set; }  // rules present, all disabled (blocking OFF)
+        public int NoRulesCount { get; set; }  // no rules on disk at all
 
         public string StateText => $"{ActiveCount} on · {PausedCount} off"
             + (NoRulesCount > 0 ? $" · {NoRulesCount} no-rules" : "");
@@ -131,26 +131,26 @@ namespace AutoCommand.Views
             + (NoRulesCount > 0 ? $"\n{NoRulesCount} target(s) have no firewall rules on disk — nothing to toggle." : "");
 
         // Star-widths for the proportional state bar; "0*" collapses a segment.
-        public string ActiveStar => ActiveCount > 0 ? $"{ActiveCount}*" : "0*";
-        public string PausedStar => PausedCount > 0 ? $"{PausedCount}*" : "0*";
+        public string ActiveStar  => ActiveCount > 0 ? $"{ActiveCount}*" : "0*";
+        public string PausedStar  => PausedCount > 0 ? $"{PausedCount}*" : "0*";
     }
 
     /// <summary>One row of the master (category) list. Key null = the pinned
     /// "All blocks" pseudo-category.</summary>
     public sealed class MasterItemVm
     {
-        public string Key;
-        public bool IsAll;
-        public string Title;
-        public string Badge;           // 🔴 / 🟠, empty for normal impact
-        public bool HasBadge;
-        public string BadgeTip;
-        public bool HasCheck;          // false for "All" — the command bar owns select-all
-        public bool? Checked;
-        public string OnStar;
-        public string OffStar;
-        public string StateText;
-        public BlockGroupVm Group;     // null for "All"
+        public string Key { get; set; }
+        public bool IsAll { get; set; }
+        public string Title { get; set; }
+        public string Badge { get; set; }  // 🔴 / 🟠, empty for normal impact
+        public bool HasBadge { get; set; }
+        public string BadgeTip { get; set; }
+        public bool HasCheck { get; set; }  // false for "All" — the command bar owns select-all
+        public bool? Checked { get; set; }
+        public string OnStar { get; set; }
+        public string OffStar { get; set; }
+        public string StateText { get; set; }
+        public BlockGroupVm Group { get; set; }  // null for "All"
         public override string ToString() => Title;
     }
 
