@@ -72,42 +72,41 @@
                     </StackPanel>
                 </TabItem.Header>
                 <!-- The rain is the monitor's right panel, not its own tab:
-                     the same live table, one glance apart. The thin rail
-                     between them folds EITHER pane — ‹ hides the list
-                     (rain only), › hides the rain (list only); a chevron
-                     disables when pressing it would empty the tab. State
-                     persists across launches. -->
+                     the same live table, one glance apart. The divider strip
+                     between them is a GridSplitter (drag anywhere on it to
+                     resize the panes; double-click re-fits the rain to its
+                     alive columns) with two solid triangles overlaid — ◄
+                     folds the list (rain only), ► folds the rain (list
+                     only); a triangle disables when pressing it would
+                     empty the tab. State persists across launches. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="ListColumn" Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition x:Name="RainColumn" Width="Auto"/>
+                        <ColumnDefinition x:Name="RailColumn" Width="22"/>
+                        <ColumnDefinition x:Name="RainColumn" Width="110" MinWidth="24"/>
                     </Grid.ColumnDefinitions>
                     <views:SvchostMonitorView x:Name="SvchostTab" Grid.Column="0"/>
-                    <Border x:Name="RainRail" Grid.Column="1" Width="18"
-                            Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Button x:Name="ListToggleBtn" Grid.Row="0" Focusable="False" Click="ListToggleBtn_Click"
-                                    Background="Transparent" BorderThickness="0"
-                                    ToolTip="Hide the process list — rain only">
-                                <TextBlock Text="‹" FontSize="13"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                            </Button>
-                            <Button x:Name="RainToggleBtn" Grid.Row="1" Focusable="False" Click="RainToggleBtn_Click"
-                                    Background="Transparent" BorderThickness="0"
-                                    ToolTip="Hide the Matrix rain">
-                                <TextBlock Text="›" FontSize="13"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                            </Button>
-                        </Grid>
-                    </Border>
+                    <GridSplitter x:Name="RainSplitter" Grid.Column="1"
+                                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                  ResizeBehavior="PreviousAndNext"
+                                  Background="{DynamicResource BorderBrush}"
+                                  ShowsPreview="True"
+                                  DragStarted="RainSplitter_DragStarted"
+                                  DragCompleted="RainSplitter_DragCompleted"
+                                  MouseDoubleClick="RainSplitter_DoubleClick"
+                                  ToolTip="Drag to resize — double-click re-fits the rain to its columns"/>
+                    <Button x:Name="ListToggleBtn" Grid.Column="1" Height="26" VerticalAlignment="Top" Margin="0,6,0,0"
+                            Focusable="False" Click="ListToggleBtn_Click"
+                            Background="Transparent" BorderThickness="0"
+                            ToolTip="Hide the process list — rain only">
+                        <Path Data="M 11,0 L 0,6.5 L 11,13 Z" Fill="{DynamicResource TextPrimaryBrush}" Stretch="None"/>
+                    </Button>
+                    <Button x:Name="RainToggleBtn" Grid.Column="1" Height="26" VerticalAlignment="Bottom" Margin="0,0,0,6"
+                            Focusable="False" Click="RainToggleBtn_Click"
+                            Background="Transparent" BorderThickness="0"
+                            ToolTip="Hide the Matrix rain">
+                        <Path Data="M 0,0 L 11,6.5 L 0,13 Z" Fill="{DynamicResource TextPrimaryBrush}" Stretch="None"/>
+                    </Button>
                     <views:MatrixRainView x:Name="MatrixRainTab" Grid.Column="2"/>
                 </Grid>
             </TabItem>

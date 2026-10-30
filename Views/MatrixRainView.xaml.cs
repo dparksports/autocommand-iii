@@ -107,20 +107,22 @@ namespace AutoCommand.Views
 
         private int _attachRetries;
 
-        /// <summary>The panel is exactly as wide as its alive columns — no
-        /// gap strip beside the rain. The renderer reports the alive,
-        /// capped column count and the cell width in DIP; the hosting Grid
-        /// column (Auto) follows. Fires on the UI thread, but a hot config
-        /// reload can arrive from the watcher thread — marshal anyway.</summary>
+        /// <summary>Raised (UI thread) when the pane's desired width
+        /// changes — the host owns the actual Grid column and decides
+        /// whether to honor it (auto-fit) or keep a user-dragged width.</summary>
+        public event Action ColumnWidthChanged;
+
+        /// <summary>Desired pane width in DIP: the alive, capped columns ×
+        /// the cell width (minimum one column, so 0 alive keeps a sliver of
+        /// presence). The +0.02 survives the device-px floor in the
+        /// renderer's grid math.</summary>
+        public double DesiredWidthDip => _renderer == null ? 0
+            : Math.Max(_renderer.CellWidthDip, _renderer.ActiveColumns * _renderer.CellWidthDip + 0.02);
+
         private void ApplyColumnWidth()
         {
             if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(ApplyColumnWidth); return; }
-            if (_renderer == null) return;
-            double dip = _renderer.CellWidthDip;
-            if (dip <= 0) return;
-            // 0 alive keeps one empty column of presence; +0.02 survives
-            // the device-px floor in RecomputeGrid
-            Width = Math.Max(dip, _renderer.ActiveColumns * dip + 0.02);
+            ColumnWidthChanged?.Invoke();
         }
 
         /// <summary>Render only while the tab is on screen — a hidden tab

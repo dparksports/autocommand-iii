@@ -77,6 +77,8 @@ namespace AutoCommand
         // preference files.
 
         private string _paneState = "both";
+        private double _rainWidth = 110;     // rain pane width in DIP (auto-fit or user-dragged)
+        private bool _rainWidthManual;       // the splitter was dragged — auto-fit stands down
 
         private static string RainPanelPath => System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -102,12 +104,10 @@ namespace AutoCommand
             bool rain = _paneState != "grid";
             ListColumn.Width = new GridLength(1, GridUnitType.Star);
             SvchostTab.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
-            // the rain sizes ITSELF to its alive columns (no gap strip);
-            // the Auto column simply follows — in rain-only mode the list
-            // column absorbs the free space and the rain hugs the edge
-            RainColumn.Width = rain ? GridLength.Auto : new GridLength(0);
+            RainColumn.Width = rain ? new GridLength(_rainWidth) : new GridLength(0);
             MatrixRainTab.Visibility = rain ? Visibility.Visible : Visibility.Collapsed;
-            // a chevron disables exactly when its press would hide the
+            RainSplitter.IsEnabled = rain;   // dragging must not widen a hidden pane
+            // a triangle disables exactly when its press would hide the
             // only visible pane
             ListToggleBtn.IsEnabled = rain;
             RainToggleBtn.IsEnabled = list;
@@ -117,12 +117,44 @@ namespace AutoCommand
             RainToggleBtn.ToolTip = list ? "Hide the Matrix rain" : "Show the Matrix rain";
         }
 
+        // ── rain pane width: auto-fit vs user-dragged ────────────────────
+        // The renderer knows how wide the rain wants to be (alive columns ×
+        // cell); the splitter lets the user take over. Dragging sets the
+        // manual flag; double-clicking the splitter returns to auto-fit;
+        // both persist.
+
+        private void ApplyRainColumnWidth()
+        {
+            if (_rainWidthManual || _paneState == "grid") return;
+            double dip = MatrixRainTab.DesiredWidthDip;
+            if (dip <= 0) return;
+            _rainWidth = dip;
+            RainColumn.Width = new GridLength(dip);
+        }
+
+        private void RainSplitter_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
+            => _rainWidthManual = true;
+
+        private void RainSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            if (RainColumn.Width.IsAbsolute) _rainWidth = RainColumn.Width.Value;
+            SavePaneState();
+        }
+
+        private void RainSplitter_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            _rainWidthManual = false;
+            ApplyRainColumnWidth();
+            SavePaneState();
+        }
+
         private void SavePaneState()
         {
             try
             {
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(RainPanelPath));
-                System.IO.File.WriteAllText(RainPanelPath, _paneState);
+                var width = _rainWidthManual ? $"manual={_rainWidth.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}" : "auto";
+                System.IO.File.WriteAllText(RainPanelPath, _paneState + "\n" + width);
             }
             catch { /* read-only profile — the choice lives for this session */ }
         }
@@ -135,9 +167,10 @@ namespace AutoCommand
             // never flashes open on launch
             try
             {
-                var saved = System.IO.File.Exists(RainPanelPath)
-                    ? System.IO.File.ReadAllText(RainPanelPath).Trim()
-                    : "";
+                var lines = System.IO.File.Exists(RainPanelPath)
+                    ? System.IO.File.ReadAllLines(RainPanelPath)
+                    : Array.Empty<string>();
+                var saved = lines.Length > 0 ? lines[0].Trim() : "";
                 _paneState = saved switch
                 {
                     "rain" => "rain",
@@ -145,8 +178,17 @@ namespace AutoCommand
                     "collapsed" => "grid",   // pre-two-pane file: the rain was hidden
                     _ => "both",
                 };
+                if (lines.Length > 1 && lines[1].Trim().StartsWith("manual=", System.StringComparison.Ordinal)
+                    && double.TryParse(lines[1].Trim().AsSpan(7), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var w)
+                    && w >= 24 && w <= 1200)
+                {
+                    _rainWidth = w;
+                    _rainWidthManual = true;
+                }
             }
             catch { _paneState = "both"; }
+            MatrixRainTab.ColumnWidthChanged += ApplyRainColumnWidth;
             ApplyPaneState();
 
             // Live version from the assembly instead of a hardcoded string
