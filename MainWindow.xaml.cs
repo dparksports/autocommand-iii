@@ -63,53 +63,92 @@ namespace AutoCommand
             }
         }
 
-        // ── the rain panel: the monitor's collapsible right side ─────────
+        // ── the monitor tab's two panes: the list and the rain ───────────
         // The Matrix rain lives beside the Process Monitor grid (one glance
-        // apart, same live table) instead of its own tab. The rail toggles
-        // it; collapsing hides the view, and the rain's own IsVisibleChanged
-        // machinery stops the renderer and feed — a hidden panel costs
-        // nothing. State persists as one word in rain_panel.txt, the same
-        // %LOCALAPPDATA%\AutoCommand home as the other preference files.
+        // apart, same live table) instead of its own tab. The rail between
+        // them folds EITHER pane: ‹ toggles the list, › toggles the rain —
+        // a chevron disables when pressing it would empty the tab, so both
+        // can never hide at once. A hidden pane costs nothing: the rain's
+        // IsVisibleChanged machinery stops its renderer and feed; the list
+        // stops rendering while its engines keep feeding the shared table
+        // the rain reads. State persists as one word in rain_panel.txt —
+        // "both" | "rain" | "grid" (older "collapsed"/"expanded" files
+        // migrate), the same %LOCALAPPDATA%\AutoCommand home as the other
+        // preference files.
 
-        private bool _rainCollapsed;
+        private string _paneState = "both";
 
         private static string RainPanelPath => System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "AutoCommand", "rain_panel.txt");
 
-        private void RainRail_Click(object sender, RoutedEventArgs e)
+        private void ListToggleBtn_Click(object sender, RoutedEventArgs e)
         {
-            _rainCollapsed = !_rainCollapsed;
-            ApplyRainPanelState();
+            _paneState = _paneState == "rain" ? "both" : "rain";
+            ApplyPaneState();
+            SavePaneState();
+        }
+
+        private void RainToggleBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _paneState = _paneState == "grid" ? "both" : "grid";
+            ApplyPaneState();
+            SavePaneState();
+        }
+
+        private void ApplyPaneState()
+        {
+            bool list = _paneState != "rain";
+            bool rain = _paneState != "grid";
+            ListColumn.Width = list ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            SvchostTab.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
+            // rain-only lets the animation own the whole tab; list-only is
+            // the monitor's original full-width layout
+            RainColumn.Width = _paneState == "rain"
+                ? new GridLength(1, GridUnitType.Star)
+                : (rain ? new GridLength(330) : new GridLength(0));
+            MatrixRainTab.Visibility = rain ? Visibility.Visible : Visibility.Collapsed;
+            // a chevron disables exactly when its press would hide the
+            // only visible pane
+            ListToggleBtn.IsEnabled = rain;
+            RainToggleBtn.IsEnabled = list;
+            ListToggleBtn.Opacity = rain ? 1.0 : 0.25;
+            RainToggleBtn.Opacity = list ? 1.0 : 0.25;
+            ListToggleBtn.ToolTip = rain ? "Hide the process list — rain only" : "Show the process list";
+            RainToggleBtn.ToolTip = list ? "Hide the Matrix rain" : "Show the Matrix rain";
+        }
+
+        private void SavePaneState()
+        {
             try
             {
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(RainPanelPath));
-                System.IO.File.WriteAllText(RainPanelPath, _rainCollapsed ? "collapsed" : "expanded");
+                System.IO.File.WriteAllText(RainPanelPath, _paneState);
             }
             catch { /* read-only profile — the choice lives for this session */ }
-        }
-
-        private void ApplyRainPanelState()
-        {
-            RainColumn.Width = _rainCollapsed ? new GridLength(0) : new GridLength(330);
-            MatrixRainTab.Visibility = _rainCollapsed ? Visibility.Collapsed : Visibility.Visible;
-            RainRailGlyph.Text = _rainCollapsed ? "‹" : "›";
-            RainRail.ToolTip = _rainCollapsed ? "Expand the Matrix rain" : "Collapse the Matrix rain";
         }
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // persisted rain-panel state applies BEFORE layout so a
-            // collapsed panel never flashes open on launch
+            // persisted pane state applies BEFORE layout so a folded pane
+            // never flashes open on launch
             try
             {
-                _rainCollapsed = System.IO.File.Exists(RainPanelPath) &&
-                                 System.IO.File.ReadAllText(RainPanelPath).Trim() == "collapsed";
+                var saved = System.IO.File.Exists(RainPanelPath)
+                    ? System.IO.File.ReadAllText(RainPanelPath).Trim()
+                    : "";
+                _paneState = saved switch
+                {
+                    "rain" => "rain",
+                    "grid" => "grid",
+                    "collapsed" => "grid",   // pre-two-pane file: the rain was hidden
+                    _ => "both",
+                };
             }
-            catch { _rainCollapsed = false; }
-            ApplyRainPanelState();
+            catch { _paneState = "both"; }
+            ApplyPaneState();
 
             // Live version from the assembly instead of a hardcoded string
             VersionText.Text = $"AutoCommand v{AppVersion}";

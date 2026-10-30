@@ -73,23 +73,41 @@
                 </TabItem.Header>
                 <!-- The rain is the monitor's right panel, not its own tab:
                      the same live table, one glance apart. The thin rail
-                     collapses it; the state persists across launches. -->
+                     between them folds EITHER pane — ‹ hides the list
+                     (rain only), › hides the rain (list only); a chevron
+                     disables when pressing it would empty the tab. State
+                     persists across launches. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition x:Name="ListColumn" Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition x:Name="RainColumn" Width="330"/>
                     </Grid.ColumnDefinitions>
                     <views:SvchostMonitorView x:Name="SvchostTab" Grid.Column="0"/>
-                    <Button x:Name="RainRail" Grid.Column="1" Width="11"
+                    <Border x:Name="RainRail" Grid.Column="1" Width="13"
                             Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0"
-                            Focusable="False" Click="RainRail_Click"
-                            ToolTip="Collapse / expand the Matrix rain">
-                        <TextBlock x:Name="RainRailGlyph" Text="›" FontSize="10"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    </Button>
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Button x:Name="ListToggleBtn" Grid.Row="0" Focusable="False" Click="ListToggleBtn_Click"
+                                    Background="Transparent" BorderThickness="0"
+                                    ToolTip="Hide the process list — rain only">
+                                <TextBlock Text="‹" FontSize="10"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                            </Button>
+                            <Button x:Name="RainToggleBtn" Grid.Row="1" Focusable="False" Click="RainToggleBtn_Click"
+                                    Background="Transparent" BorderThickness="0"
+                                    ToolTip="Hide the Matrix rain">
+                                <TextBlock Text="›" FontSize="10"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                            </Button>
+                        </Grid>
+                    </Border>
                     <views:MatrixRainView x:Name="MatrixRainTab" Grid.Column="2"/>
                 </Grid>
             </TabItem>
