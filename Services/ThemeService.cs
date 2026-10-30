@@ -61,7 +61,29 @@ namespace AutoCommand.Services
         };
 
         public static string Saved =>
-            Registry.GetValue($@"HKEY_CURRENT_USER\{RegKey}", RegName, "Dark") as string ?? "Dark";
+            Registry.GetValue($@"HKEY_CURRENT_USER\{RegKey}", RegName, "Light") as string ?? "Light";
+
+        /// <summary>
+        /// One-time adoption of a changed DEFAULT. The app lived its whole
+        /// life defaulting to Dark, so every existing install's registry
+        /// says "Dark" — written by startup, never chosen by anyone. This
+        /// flips such installs to the new default (Light, the Shields Up
+        /// look) exactly once, guarded by a marker value; a user who then
+        /// chooses Dark in Settings keeps that choice forever. Fresh
+        /// installs never see a flip — they start at the new default.
+        /// </summary>
+        public static void AdoptDefaultOnce()
+        {
+            try
+            {
+                using var k = Registry.CurrentUser.CreateSubKey(RegKey);
+                if ((k.GetValue("ThemeDefaultEra") as string) == "2") return;   // already adopted
+                if ((k.GetValue(RegName) as string ?? "Dark") == "Dark")
+                    k.SetValue(RegName, "Light");
+                k.SetValue("ThemeDefaultEra", "2");
+            }
+            catch { /* registry unavailable — fall back to Saved's default */ }
+        }
 
         /// <summary>Apply a theme now and remember it. theme: "Dark" | "Light".</summary>
         public static void ApplyTheme(string theme)

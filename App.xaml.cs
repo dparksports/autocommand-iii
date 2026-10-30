@@ -112,7 +112,11 @@ namespace AutoCommand
             NotifyIfInstallMoved();
 
             // Apply the saved theme before any window loads (brushes are
-            // DynamicResource, so this also re-themes live when changed later)
+            // DynamicResource, so this also re-themes live when changed later).
+            // AdoptDefaultOnce first: the default era changed to Light (the
+            // Shields Up look), and installs that lived under the old Dark
+            // default adopt it once here.
+            Services.ThemeService.AdoptDefaultOnce();
             Services.ThemeService.ApplyTheme(Services.ThemeService.Saved);
 
             // Handle UI thread exceptions
