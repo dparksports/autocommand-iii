@@ -41,22 +41,22 @@ jobs:
       - name: Offline suites (strict)
         shell: pwsh
         run: |
+          # 2026.10.30 dead-code sweep removed the BITS/PyTrace/DnsFeed
+          # families and their self-tests; BridgeSelfTest and RainSelfTest
+          # joined the strict set with their features.
           $suites = @(
             'NetWatchSelfTest',
-            'BitsTraceSelfTest',
             'OneSettingsCadenceSelfTest',
             'ContainSelfTest',
-            'DnsFeedSelfTest',
-            'ProxyInstallSelfTest'
+            'ProxyInstallSelfTest',
+            'BridgeSelfTest',
+            'RainSelfTest'
           )
           foreach ($s in $suites) {
             Write-Host "== $s =="
             dotnet run --project $s
             if ($LASTEXITCODE -ne 0) { throw "$s failed" }
           }
-          Write-Host "== PyTraceSelfTest (reassemble) =="
-          dotnet run --project PyTraceSelfTest -- reassemble
-          if ($LASTEXITCODE -ne 0) { throw 'PyTraceSelfTest reassemble failed' }
 
       - name: Live-channel suites (advisory on a stock runner)
         continue-on-error: true
