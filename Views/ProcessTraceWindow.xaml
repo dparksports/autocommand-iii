@@ -19,10 +19,10 @@
             <TextBlock Text="PID Inquiry" Style="{StaticResource PageHeader}"/>
             <TextBlock Text="How was this process spawned? Ancestry chain, spawn mechanism and corroborating records — with PID-reuse checks before any parent is trusted."
                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,-8,0,0"/>
-            <Border x:Name="VerdictBanner" Background="#1A4A8A" CornerRadius="6" Padding="12,8" Margin="0,10,0,0">
+            <Border x:Name="VerdictBanner" Background="{DynamicResource BadgeBlueBg}" CornerRadius="6" Padding="12,8" Margin="0,10,0,0">
                 <StackPanel>
-                    <TextBlock x:Name="VerdictKindText" Text="Collecting…" Foreground="#7EB8F7" FontWeight="SemiBold" FontSize="14"/>
-                    <TextBlock x:Name="VerdictDetailText" Foreground="#B9D4F5" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="VerdictKindText" Text="Collecting…" Foreground="{DynamicResource AccentBlueBrush}" FontWeight="SemiBold" FontSize="14"/>
+                    <TextBlock x:Name="VerdictDetailText" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"/>
                 </StackPanel>
             </Border>
         </StackPanel>
@@ -79,7 +79,7 @@
                                         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Verified}" Value="False">
-                                                <Setter Property="Foreground" Value="#F2A0B4"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -87,7 +87,7 @@
                             </TextBlock>
                             <TextBlock Text="{Binding Cmd}" Foreground="{DynamicResource TextSecondaryBrush}"
                                        FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding Note}" Foreground="#FBBF24" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Note}" Foreground="{DynamicResource AccentAmberBrush}" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -105,7 +105,7 @@
                                 <TextBlock FontFamily="Consolas" FontSize="11" TextWrapping="Wrap">
                                     <!-- Mode=OneWay is required: Run.Text bindings default
                                          to TwoWay, which throws on read-only VM properties. -->
-                                    <Run Text="{Binding Source, Mode=OneWay}" FontWeight="SemiBold" Foreground="#7EB8F7"/>
+                                    <Run Text="{Binding Source, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBlueBrush}"/>
                                     <Run Text=" — "/>
                                     <Run Text="{Binding Detail, Mode=OneWay}"/>
                                 </TextBlock>
@@ -114,7 +114,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <TextBlock x:Name="WarningsText" Foreground="#FBBF24" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+            <TextBlock x:Name="WarningsText" Foreground="{DynamicResource AccentAmberBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
         </StackPanel>
 
         <!-- Buttons + status -->

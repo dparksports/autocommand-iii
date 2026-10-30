@@ -9,7 +9,7 @@
     <Window.Resources>
         <!-- brighter muted gray than the app-wide TextSecondaryBrush - this
              sheet's secondary lines are small and dense -->
-        <SolidColorBrush x:Key="MutedBrush" Color="#B9C3D2"/>
+        
     </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -23,7 +23,7 @@
         <TextBlock x:Name="HeadlineText" Grid.Row="0" FontSize="14" FontWeight="SemiBold"
                    TextWrapping="Wrap" Margin="0,0,0,4"/>
         <TextBlock x:Name="SubText" Grid.Row="1" FontSize="11" TextWrapping="Wrap"
-                   Foreground="{StaticResource MutedBrush}" Margin="0,0,0,10"/>
+                   Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,10"/>
 
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
             <!-- Checked handlers are wired in code after InitializeComponent:

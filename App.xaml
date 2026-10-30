@@ -50,6 +50,13 @@
         <SolidColorBrush x:Key="RowSelectedBrush" Color="#20FFFFFF"/>
         <SolidColorBrush x:Key="GridLineBrush" Color="#18FFFFFF"/>
 
+        <!-- badge/pill backgrounds + muted caption text (swapped by ThemeService;
+             dark seeds here, light = Shields Up accent washes) -->
+        <SolidColorBrush x:Key="BadgeRedBg" Color="#3A1520"/>
+        <SolidColorBrush x:Key="BadgeAmberBg" Color="#3A2A14"/>
+        <SolidColorBrush x:Key="BadgeBlueBg" Color="#1A4A8A"/>
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#B9C3D2"/>
+
         <!-- Identity gradients: the Fluent blue scheme (values swapped per theme by ThemeService) -->
         <LinearGradientBrush x:Key="PrimaryGradientBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#3B82F6" Offset="0"/>

@@ -10,9 +10,9 @@
     <StackPanel Margin="20">
         <TextBlock x:Name="HeadText" TextWrapping="Wrap" FontSize="14" FontWeight="SemiBold"
                    Foreground="{DynamicResource TextPrimaryBrush}"/>
-        <Border x:Name="WarningBorder" Background="#26FBBF24" BorderBrush="#FBBF24" BorderThickness="1"
+        <Border x:Name="WarningBorder" Background="#26FBBF24" BorderBrush="{DynamicResource AccentAmberBrush}" BorderThickness="1"
                 CornerRadius="4" Padding="10,6" Margin="0,12,0,0">
-            <TextBlock x:Name="WarningText" TextWrapping="Wrap" FontSize="12" Foreground="#FBBF24"/>
+            <TextBlock x:Name="WarningText" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AccentAmberBrush}"/>
         </Border>
         <TextBlock x:Name="DetailText" TextWrapping="Wrap" Margin="0,12,0,0" FontSize="12"
                    Foreground="{DynamicResource TextSecondaryBrush}"/>

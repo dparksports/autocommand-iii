@@ -42,8 +42,8 @@
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsRisky}" Value="True">
-                            <Setter Property="Background" Value="#2A0F18"/>
-                            <Setter Property="Foreground" Value="#F2A0B4"/>
+                            <Setter Property="Background" Value="{DynamicResource BadgeRedBg}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>

@@ -122,14 +122,14 @@
 
                 <!-- Enforcer Status -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse x:Name="EnforcerDot" Width="8" Height="8" Fill="#00E5FF" Margin="0,0,8,0"/>
+                    <Ellipse x:Name="EnforcerDot" Width="8" Height="8" Fill="{DynamicResource AccentCyanBrush}" Margin="0,0,8,0"/>
                     <TextBlock x:Name="EnforcerStatusText" Text="Security Enforcer: Active" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"/>
                 </StackPanel>
 
                 <!-- Threat Alert -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
                     <TextBlock x:Name="ThreatAlertText" Text=""
-                               Foreground="#E5A631" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource AccentAmberBrush}" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                     <Button x:Name="ReviewAlertBtn" Content="Review"
                             Style="{StaticResource PrimaryButton}" Padding="8,2" FontSize="10" Margin="8,0,0,0"
                             Visibility="Collapsed" Click="ReviewAlertBtn_Click"/>
@@ -141,7 +141,7 @@
 
                 <!-- Version -->
                 <TextBlock x:Name="VersionText" Grid.Column="2" Text="AutoCommand"
-                           Foreground="#5A5A62" FontSize="10" VerticalAlignment="Center"/>
+                           Foreground="{DynamicResource MutedTextBrush}" FontSize="10" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

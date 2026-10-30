@@ -46,14 +46,14 @@
                 <!-- Ignored/blocked counts sit right after the monitor state
                      they belong to, not at the far end of the controls row. -->
                 <Button x:Name="IgnoredListBtn" Grid.Column="1" Content="Ignored: 0" Click="IgnoredListBtn_Click" Margin="0,0,8,0" Padding="10,2" FontSize="11"
-                        Background="#3A1520" Foreground="#F2A0B4" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
+                        Background="{DynamicResource BadgeRedBg}" Foreground="{DynamicResource AccentRedBrush}" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
                         ToolTip="View and manage ignored processes">
                     <Button.Resources>
                         <Style TargetType="Border"><Setter Property="CornerRadius" Value="10"/></Style>
                     </Button.Resources>
                 </Button>
                 <Button x:Name="BlockedListBtn" Grid.Column="2" Content="Blocked: 0" Click="BlockedListBtn_Click" Margin="0,0,12,0" Padding="10,2" FontSize="11"
-                        Background="#3A1520" Foreground="#F2A0B4" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
+                        Background="{DynamicResource BadgeRedBg}" Foreground="{DynamicResource AccentRedBrush}" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"
                         ToolTip="View and remove firewall blocks created from this monitor">
                     <Button.Resources>
                         <Style TargetType="Border"><Setter Property="CornerRadius" Value="10"/></Style>
@@ -61,11 +61,11 @@
                 </Button>
                 <!-- High-transmitter threshold chip: rows at/above this TX
                      volume pin to the top of the grid and get tinted. -->
-                <Border Grid.Column="3" Background="#3A2A14" CornerRadius="10" Padding="10,3" Margin="0,0,12,0" VerticalAlignment="Center"
+                <Border Grid.Column="3" Background="{DynamicResource BadgeAmberBg}" CornerRadius="10" Padding="10,3" Margin="0,0,12,0" VerticalAlignment="Center"
                         ToolTip="Rows whose transmitted volume reaches this threshold are pinned to the top of the grid and tinted red — the heavy talkers separate themselves from the noise. Change the number or unit anytime; remembered across launches.">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock x:Name="HighTxCountText" Text="High TX: 0 ≥ 1 KB"
-                                   Foreground="#E5C77B" FontSize="11" FontFamily="Consolas" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource AccentAmberBrush}" FontSize="11" FontFamily="Consolas" VerticalAlignment="Center"/>
                         <TextBox x:Name="TxThresholdBox" Width="44" Margin="8,0,0,0" Padding="2" FontFamily="Consolas" FontSize="11"
                                  Background="{DynamicResource SurfaceBrush}" Foreground="{DynamicResource TextPrimaryBrush}"
                                  BorderBrush="{DynamicResource BorderBrush}" TextChanged="TxThreshold_Changed"/>
@@ -77,9 +77,9 @@
                     </StackPanel>
                 </Border>
                 <!-- DNS cache counter chip -->
-                <Border Grid.Column="4" Background="#1A4A8A" CornerRadius="10" Padding="10,3" Margin="0,0,12,0" VerticalAlignment="Center">
+                <Border Grid.Column="4" Background="{DynamicResource BadgeBlueBg}" CornerRadius="10" Padding="10,3" Margin="0,0,12,0" VerticalAlignment="Center">
                     <TextBlock x:Name="DnsCacheChip" Text="DNS cache: 0 entries"
-                               Foreground="#7EB8F7" FontSize="11" FontFamily="Consolas"/>
+                               Foreground="{DynamicResource AccentBlueBrush}" FontSize="11" FontFamily="Consolas"/>
                 </Border>
                 <StackPanel Grid.Column="5" Orientation="Horizontal">
                     <CheckBox x:Name="HideCloudCheck" Content="Hide Known/Cloud IPs" IsChecked="False" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,12,0" Checked="Filter_Changed" Unchecked="Filter_Changed"/>
@@ -105,13 +105,13 @@
                                 <ListBox x:Name="BlockedListBox" MaxHeight="200" MinHeight="34" Background="{DynamicResource SurfaceBrush}" Foreground="{DynamicResource TextPrimaryBrush}" BorderBrush="{DynamicResource BorderBrush}" FontFamily="Consolas" FontSize="11"/>
                                 <Button Content="Unblock Selected" Click="UnblockBtn_Click" Margin="0,8,0,0" Padding="12,2" HorizontalAlignment="Left" Style="{StaticResource PrimaryButton}"/>
                                 <Button Content="🛠 Manage all (grouped, classified, bulk actions)…" Click="ManageBlockedBtn_Click" Margin="0,6,0,0" Padding="4,2" HorizontalAlignment="Left"
-                                        Background="Transparent" Foreground="#7EB8F7" BorderThickness="0" Cursor="Hand"/>
+                                        Background="Transparent" Foreground="{DynamicResource AccentBlueBrush}" BorderThickness="0" Cursor="Hand"/>
                                 <Separator Margin="0,8,0,4"/>
                                 <!-- 'Don't ask again' state: visible + reversible, not a hidden cookie -->
                                 <TextBlock x:Name="SuppressedPromptsText" Text="All confirmation prompts active"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="10" Margin="0,0,0,4"/>
                                 <Button Content="↩ Reset 'don't ask again' choices" Click="ResetConfirmPrefsBtn_Click" Margin="0,0,0,0" Padding="4,2" HorizontalAlignment="Left"
-                                        Background="Transparent" Foreground="#7EB8F7" BorderThickness="0" Cursor="Hand"
+                                        Background="Transparent" Foreground="{DynamicResource AccentBlueBrush}" BorderThickness="0" Cursor="Hand"
                                         ToolTip="Re-arm every block confirmation warning that was suppressed with 'Don't ask again'"/>
                             </StackPanel>
                         </Border>
@@ -192,7 +192,7 @@
                                                 <Setter Property="ToolTip" Value="{x:Null}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsProcessBlocked}" Value="True">
-                                                <Setter Property="Foreground" Value="#E5534B"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                                                 <Setter Property="TextDecorations" Value="Strikethrough"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -219,7 +219,7 @@
                                         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsIpBlocked}" Value="True">
-                                                <Setter Property="Foreground" Value="#E5534B"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentRedBrush}"/>
                                                 <Setter Property="TextDecorations" Value="Strikethrough"/>
                                                 <Setter Property="ToolTip" Value="{Binding IpBlockToolTip}"/>
                                             </DataTrigger>
@@ -263,7 +263,7 @@
              ⛔ IS the confirmation; this just says what happened and offers
              the takeback. Auto-hides after a few seconds. -->
         <Border x:Name="BlockToast" Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16"
-                Background="{DynamicResource SurfaceAltBrush}" BorderBrush="#3FBF7F" BorderThickness="1" CornerRadius="6"
+                Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource AccentGreenBrush}" BorderThickness="1" CornerRadius="6"
                 Padding="14,10" Visibility="Collapsed" Panel.ZIndex="5" MaxWidth="560">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="BlockToastText" TextWrapping="Wrap" MaxWidth="400" VerticalAlignment="Center"

@@ -16,39 +16,48 @@ namespace AutoCommand.Services
     /// at runtime — every theme-brush reference in XAML is a DynamicResource, so
     /// the swap applies live without a restart. Choice persists in HKCU.
     ///
-    /// One identity: the Fluent reference palette and its slate dark variant.
-    /// Light = airy gray-blue canvas, white floating cards, muted blue accent.
-    /// Dark  = the same blues on a deep slate canvas. (Some brush KEY names
-    /// retain historical "Violet/Pink/Cyan" wording — values are all blues
-    /// now; keys are internal identifiers referenced across the XAML.)
+    /// Two identities: Dark  = the operator console (deep slate, blues).
+    /// Light = the Shields Up look — Apple-style light theme from the Shields Up
+    /// app's design system (#ECF2F9 canvas, white surfaces, #EBEBEB hairlines,
+    /// #1D1D1F text, #007AFF accent, status colors tuned ≥4.5:1 on light).
+    /// (Some brush KEY names retain historical "Violet/Pink/Cyan" wording —
+    /// values are all blues now; keys are internal identifiers referenced
+    /// across the XAML.)
     /// </summary>
     public static class ThemeService
     {
         private const string RegKey = @"Software\AutoCommand";
         private const string RegName = "Theme";
 
-        // (resource key, dark value, light value)
+        // (resource key, dark value, light value — light = Shields Up palette)
         private static readonly (string Key, string Dark, string Light)[] BrushMap =
         {
-            ("BackgroundBrush",    "#171B22", "#F0F2F6"),
+            ("BackgroundBrush",    "#171B22", "#ECF2F9"),
             ("SurfaceBrush",       "#1F242E", "#FFFFFF"),
-            ("SurfaceAltBrush",    "#282F3B", "#F7F9FC"),
-            ("BorderBrush",        "#39414F", "#D9DEE7"),
-            ("TextPrimaryBrush",   "#F1F4F9", "#1A1D23"),
-            ("TextSecondaryBrush", "#98A2B3", "#5B6472"),
-            ("AccentBlueBrush",    "#3B82F6", "#2F74B5"),
-            ("AccentGreenBrush",   "#34D399", "#059669"),
-            ("AccentAmberBrush",   "#F59E0B", "#B45309"),
-            ("AccentRedBrush",     "#F87171", "#DC2626"),
-            ("AccentVioletBrush",  "#4A9EEF", "#2F74B5"),   // hover accent — blue now
+            ("SurfaceAltBrush",    "#282F3B", "#F6F8FA"),
+            ("BorderBrush",        "#39414F", "#EBEBEB"),
+            ("TextPrimaryBrush",   "#F1F4F9", "#1D1D1F"),
+            ("TextSecondaryBrush", "#98A2B3", "#86868B"),
+            ("AccentBlueBrush",    "#3B82F6", "#007AFF"),
+            ("AccentGreenBrush",   "#34D399", "#1E8E3E"),
+            ("AccentAmberBrush",   "#F59E0B", "#B26A00"),
+            ("AccentRedBrush",     "#F87171", "#D70015"),
+            ("AccentVioletBrush",  "#4A9EEF", "#0062CC"),   // hover accent — blue now
             ("AccentPinkBrush",    "#5FA8F5", "#3E86D6"),   // secondary accent — blue now
-            ("AccentCyanBrush",    "#53B4E8", "#2A6FA8"),
-            ("NavSelectedBrush",   "#16202E", "#E2EAF4"),
-            ("NavHoverBrush",      "#101823", "#EAEFF6"),
-            ("RowAltBrush",        "#20262F", "#F4F7FA"),
+            ("AccentCyanBrush",    "#53B4E8", "#0051A8"),
+            ("NavSelectedBrush",   "#16202E", "#E5F1FF"),
+            ("NavHoverBrush",      "#101823", "#ECF2F9"),
+            ("RowAltBrush",        "#20262F", "#F6F8FA"),
             ("RowHoverBrush",      "#262E3A", "#EBF0F6"),
-            ("RowSelectedBrush",   "#31405A", "#D9E4F2"),
-            ("GridLineBrush",      "#2A323E", "#E6EAF0"),
+            ("RowSelectedBrush",   "#31405A", "#E5F1FF"),
+            ("GridLineBrush",      "#2A323E", "#EBEBEB"),
+            // pill/badge backgrounds — dark uses the old hand-tuned tints,
+            // light uses Shields Up's accent-at-15% washes
+            ("BadgeRedBg",         "#3A1520", "#26D70015"),
+            ("BadgeAmberBg",       "#3A2A14", "#26B26A00"),
+            ("BadgeBlueBg",        "#1A4A8A", "#26007AFF"),
+            // between TextPrimary and TextSecondary for 10-11 px captions
+            ("MutedTextBrush",     "#B9C3D2", "#6E7681"),
         };
 
         public static string Saved =>
@@ -64,9 +73,9 @@ namespace AutoCommand.Services
 
             if (light)
             {
-                res["PrimaryGradientBrush"] = MakeGradient("#2F74B5", "#3E86D6");
-                res["DangerGradientBrush"] = MakeGradient("#DC2626", "#EF4444");
-                res["TabIndicatorGradientBrush"] = MakeGradient("#2F74B5", "#5FA8F5");
+                res["PrimaryGradientBrush"] = MakeGradient("#007AFF", "#0062CC");
+                res["DangerGradientBrush"] = MakeGradient("#D70015", "#B40011");
+                res["TabIndicatorGradientBrush"] = MakeGradient("#007AFF", "#3E86D6");
             }
             else
             {

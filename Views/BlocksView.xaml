@@ -8,7 +8,7 @@
              TextSecondaryBrush (#98A2B3, ~6:1) reads as dim at 10-11 px on
              this dense screen, so the Blocks tab carries its own brighter
              gray while keeping TextPrimary for the hierarchy above it. -->
-        <SolidColorBrush x:Key="BlocksMutedBrush" Color="#B9C3D2"/>
+        
     </UserControl.Resources>
 
     <Grid Margin="16,12,16,8">
@@ -35,8 +35,8 @@
                 <TextBlock Text="⛔ Blocks" FontSize="20" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <TextBlock Text="Every firewall block this app created — categories on the left, the selected category's blocks on the right, grouped by the Windows service that actually made the connection."
-                           FontSize="11" Foreground="{StaticResource BlocksMutedBrush}" Margin="0,2,0,0"/>
-                <TextBlock x:Name="StatusText" FontSize="11" Foreground="{StaticResource BlocksMutedBrush}" Margin="0,2,0,0"/>
+                           FontSize="11" Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,0,0"/>
+                <TextBlock x:Name="StatusText" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" Margin="0,2,0,0"/>
             </StackPanel>
         </DockPanel>
 
@@ -109,7 +109,7 @@
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                     <TextBlock Text="Broken feature:" FontSize="11" VerticalAlignment="Center"
-                               Foreground="{StaticResource BlocksMutedBrush}" Margin="0,0,6,0"/>
+                               Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,6,0"/>
                     <ComboBox x:Name="SymptomCombo" MinWidth="300" FontSize="11"
                               SelectionChanged="SymptomCombo_SelectionChanged"/>
                     <Button x:Name="PauseMatchedBtn" Click="PauseMatchedBtn_Click" Margin="8,0,0,0"
@@ -212,7 +212,7 @@
                                             </Grid>
                                         </Border>
                                         <TextBlock Text="{Binding StateText}" FontSize="11"
-                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"/>
+                                                   Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
                             </DataTemplate>
@@ -237,9 +237,9 @@
                                        Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <TextBlock x:Name="DetailSummaryText" FontSize="11" Margin="0,3,0,0"
-                                   Foreground="{StaticResource BlocksMutedBrush}"/>
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
                         <TextBlock x:Name="DetailDescText" FontSize="11" TextWrapping="Wrap" MaxWidth="880" Margin="0,3,0,0"
-                                   Foreground="{StaticResource BlocksMutedBrush}"/>
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button x:Name="DetailRestoreBtn" Click="DetailRestoreBtn_Click" Padding="10,3" FontSize="11"
                                     Margin="0,0,8,0" Visibility="Collapsed"
@@ -279,13 +279,13 @@
                                                    Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding TargetToolTip}" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Grid.Column="3" Text="{Binding ServiceDisplay}" FontSize="11"
-                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding ServiceToolTip}" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Grid.Column="4" Text="{Binding ClassDisplay}" FontSize="11"
                                                    Foreground="{Binding ClassBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding ClassToolTip}"/>
                                         <TextBlock Grid.Column="5" Text="{Binding CreatedDisplay}" FontSize="11"
-                                                   Foreground="{StaticResource BlocksMutedBrush}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"
                                                    ToolTip="{Binding CreatedToolTip}"/>
                                         <TextBlock Grid.Column="6" Text="{Binding LastTraffic}" FontSize="11"
                                                    Foreground="{Binding LastTrafficBrush}" VerticalAlignment="Center"
@@ -313,7 +313,7 @@
         <!-- Post-action toast: the apply WAS the confirmation's preview; this
              says what happened and offers the takeback. Auto-hides. -->
         <Border x:Name="BlockToast" Grid.RowSpan="4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16"
-                Background="{DynamicResource SurfaceAltBrush}" BorderBrush="#3FBF7F" BorderThickness="1" CornerRadius="6"
+                Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource AccentGreenBrush}" BorderThickness="1" CornerRadius="6"
                 Padding="14,10" Visibility="Collapsed" Panel.ZIndex="5" MaxWidth="560">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="BlockToastText" TextWrapping="Wrap" MaxWidth="400" VerticalAlignment="Center"
