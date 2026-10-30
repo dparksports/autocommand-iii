@@ -315,7 +315,9 @@ namespace AutoCommand.Intercept.Core
             }
 
             string tlsVersion = TlsName(clientTls.SslProtocol);
-            string cipher = clientTls.CipherAlgorithm.ToString();
+            // NegotiatedCipherSuite (SYSLIB0058 replaced the Cipher* family);
+            // the stream is authenticated here, so schannel always answers
+            string cipher = clientTls.NegotiatedCipherSuite.ToString();
 
             var requestTee = new MemoryStream();
             var responseTee = new MemoryStream();
@@ -548,6 +550,10 @@ namespace AutoCommand.Intercept.Core
             }
         }
 
+        // SYSLIB0039: naming the legacy versions is the point — the proxy
+        // itself negotiates via SslProtocols.None (OS defaults), this switch
+        // only labels what a peer chose to handshake with
+#pragma warning disable SYSLIB0039
         private static string TlsName(SslProtocols protocol) => protocol switch
         {
             SslProtocols.Tls13 => "TLS 1.3",
@@ -556,6 +562,7 @@ namespace AutoCommand.Intercept.Core
             SslProtocols.Tls => "TLS 1.0",
             _ => protocol.ToString(),
         };
+#pragma warning restore SYSLIB0039
 
         /// <summary>Replays pre-read bytes before delegating to the inner
         /// stream — lets the server-side SslStream see a ClientHello that

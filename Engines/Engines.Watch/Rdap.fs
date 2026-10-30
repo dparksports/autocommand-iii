@@ -110,7 +110,7 @@ type RdapService() as this =
 
     // request pacing / cooldown state (nextSlotUtc is serialized by the
     // gate; everything else by gateLock)
-    let netGate = SemaphoreSlim(1, 1)
+    let netGate = new SemaphoreSlim(1, 1)
     let mutable nextSlotUtc = DateTime()
     let hostCooldownUntil = Dictionary<string, DateTime>()
     let mutable queued = 0

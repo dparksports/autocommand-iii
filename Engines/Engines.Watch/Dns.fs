@@ -124,7 +124,7 @@ type DnsResolutionService() as this =
     // ── fields ────────────────────────────────────────────────────────
     let cache = ConcurrentDictionary<string, CacheEntry>()
     let forwardCache = ConcurrentDictionary<string, ForwardCacheEntry>()
-    let forwardGate = SemaphoreSlim(1, 1)
+    let forwardGate = new SemaphoreSlim(1, 1)
 
     // Queue of items waiting for resolution; bounded to avoid runaway growth
     let queue =
@@ -162,7 +162,7 @@ type DnsResolutionService() as this =
     let mutable idleStarted = 0
     let mutable idleFor: Func<TimeSpan> = null
 
-    static let instance = DnsResolutionService()
+    static let instance = new DnsResolutionService()
 
     do
         this.LoadCacheFromDisk()
@@ -200,7 +200,7 @@ type DnsResolutionService() as this =
             workerTask <- Task.Run(fun () -> this.WorkerLoopAsync cts.Token)
 
             saveTimer <-
-                Timer(
+                new Timer(
                     (fun _ ->
                         this.SaveCacheToDisk()
                         this.SaveGeoCacheToDisk()),

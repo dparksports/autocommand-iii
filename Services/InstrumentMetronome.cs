@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
+#nullable enable
+
 namespace AutoCommand.Services
 {
     public enum InstrumentCost { Light = 0, Heavy = 1 }

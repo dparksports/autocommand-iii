@@ -7,7 +7,6 @@
 namespace AutoCommand.Engines.Diagnosis
 
 open System
-open System.Runtime.InteropServices
 
 type VerdictKind =
     | Blocked = 0               // nothing reaches the site from this PC
@@ -69,9 +68,13 @@ type SiteVerdict private () =
     /// Decide from whatever evidence exists. Any input may be null
     /// (passive-only or probe-only runs degrade, never guess).
     /// </summary>
+    // dependency stays a plain (non-optional) parameter: F# records cannot
+    // carry a typed null default, so DefaultParameterValue(null) was
+    // ignored in metadata anyway (FS3211) — callers pass explicit null,
+    // which Decide handles like the C# original
     static member Decide (fingerprint: SiteFingerprint,
                           report: SiteProbeReport,
-                          [<Optional; DefaultParameterValue(null)>] dependency: Report) : Verdict =
+                          dependency: Report) : Verdict =
         // F# port: the C# entry point accepted null for every input; the
         // box-based checks below hold whatever the parallel DTO ports use
         // (F# class or record — both are reference types at runtime).

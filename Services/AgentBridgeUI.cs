@@ -38,7 +38,8 @@ namespace AutoCommand.Services
             var tcs = new TaskCompletionSource<System.Tuple<bool, bool>>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            dispatcher.BeginInvoke(() =>
+            // fire-and-forget: the result arrives through tcs below
+            _ = dispatcher.BeginInvoke(() =>
             {
                 try
                 {

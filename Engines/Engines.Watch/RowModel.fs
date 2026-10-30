@@ -810,7 +810,9 @@ type SvchostMonitorItem() as this =
 /// the two Visibility props (UI types) were dropped — no engine consumer.
 /// </summary>
 [<AllowNullLiteral>]
-type SpawnItem() as this =
+// no type-level self-identifier: every member binds its own, and an unused
+// `as this` adds runtime initialization checks (FS1183)
+type SpawnItem() =
     let propChanged = Event<System.ComponentModel.PropertyChangedEventHandler, System.ComponentModel.PropertyChangedEventArgs>()
 
     let mutable exited_ = false

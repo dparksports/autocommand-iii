@@ -217,12 +217,14 @@ static bool InteractiveAppRunning()
 
 static string AppExePath()
 {
-    string? overridePath = Environment.GetEnvironmentVariable("AC_APP_EXE");
+    // AgentProxy builds with <Nullable>disable</Nullable>, so the null
+    // handling here is explicit rather than annotation-based
+    string overridePath = Environment.GetEnvironmentVariable("AC_APP_EXE");
     if (!string.IsNullOrEmpty(overridePath)) return overridePath;
     try
     {
         // this proxy lives in <install>\tools\ — the app sits one level up
-        string? dir = Path.GetDirectoryName(Environment.ProcessPath);
+        string dir = Path.GetDirectoryName(Environment.ProcessPath);
         return Path.Combine(Path.GetDirectoryName(dir ?? "") ?? "", "AutoCommand.exe");
     }
     catch { return ""; }

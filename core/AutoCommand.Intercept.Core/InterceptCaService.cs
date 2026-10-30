@@ -46,7 +46,7 @@ namespace AutoCommand.Intercept.Core
                 try
                 {
                     if (File.Exists(CaPath))
-                        _ca = new X509Certificate2(CaPath);
+                        _ca = X509CertificateLoader.LoadCertificateFromFile(CaPath);
                 }
                 catch { /* unreadable pfx — regenerate below */ }
 
