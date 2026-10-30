@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Rain self-test: the Matrix-rain presentation engine against a
+       SYNTHETIC feed (no Sysmon, no raw sockets, no admin) — an
+       asInvoker window with the engine hosted in a TabControl exactly the
+       way the Rain tab hosts it, so attach timing, sizing and the frame
+       loop are exercised without elevating. Run it, watch it rain, close
+       it.  .\RainSelfTest\bin\Release\net10.0-windows\RainSelfTest.exe -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>RainSelfTest</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MatrixRain\AutoCommand.MatrixRain.Core\AutoCommand.MatrixRain.Core.csproj" />
+  </ItemGroup>
+
+</Project>

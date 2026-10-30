@@ -157,6 +157,9 @@
          own ProjectReference — same glob reason as core\ (unsafe renderer
          + duplicate types in the WPF _wpftmp pass otherwise) -->
     <Compile Remove="MatrixRain\**" />
+    <!-- Rain self-test: asInvoker WPF harness over the rain engine with a
+         synthetic feed — own Main(), same glob reason as every side project -->
+    <Compile Remove="RainSelfTest\**" />
   </ItemGroup>
 
   <!-- Filter out Linux .so native binaries when publishing for Windows win-x64 -->

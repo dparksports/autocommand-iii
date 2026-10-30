@@ -56,6 +56,11 @@ namespace AutoCommand.Matrix
         public double Activity;
         public readonly List<RainDrop> Drops = new(4);
         public readonly List<WakeCell> Wake = new(32);
+        /// <summary>Fractional fall-step accumulators: rows/sec is below
+        /// one row per frame at common rates (25/s at 60fps = 0.42 rows a
+        /// frame), and flooring that per frame floors it to ZERO forever —
+        /// the carry spends whole rows only when they have accrued.</summary>
+        public double FallCarryTx, FallCarryRx;
         public int Slot;
         public int PrevSlot = -1;               // last frame's slot — re-slot compensation
         public double XOffset;                  // device-px slide toward 0 (entrance / re-rank glide)
@@ -213,7 +218,35 @@ namespace AutoCommand.Matrix
         /// the diagnostics strip in the Rain tab reads these.</summary>
         public int LiveColumns => _columns.Count;
         public double LastFps => _fpsEma;
+        /// <summary>Surface size in device px — 1x1 means the surface was
+        /// never sized (the classic "nothing renders" state).</summary>
+        public int SurfaceWidth => _w;
+        public int SurfaceHeight => _h;
+
+        // --- self-test instrumentation (title-channel diagnostics) ---
+        public long DebugDraws;     // every glyph blit since start
+        public int DebugDrops;      // live drops across columns
+        public double DebugBudget;  // newest column's letter budget
         private double _fpsEma;
+
+        /// <summary>Self-test: snapshot the rain surface to a PNG — proves
+        /// whether the bitmap holds glyphs the screen never showed.</summary>
+        public void DumpRainPng(string path)
+        {
+            if (_bmp == null) return;
+            try
+            {
+                var stride = _w * 4;
+                var buf = new byte[stride * _h];
+                _bmp.CopyPixels(buf, stride, 0);
+                var src = BitmapSource.Create(_w, _h, 96, 96, PixelFormats.Pbgra32, null, buf, stride);
+                var enc = new PngBitmapEncoder();
+                enc.Frames.Add(BitmapFrame.Create(src));
+                using var fs = System.IO.File.Create(path);
+                enc.Save(fs);
+            }
+            catch { }
+        }
 
         public void Start()
         {
@@ -606,19 +639,29 @@ namespace AutoCommand.Matrix
 
             if (!col.Exited)
             {
-                // Fall-speed ceiling, rows/sec, fractional: a slow cap can
-                // yield 0 for a frame — the letter budget simply banks and
-                // the head steps on the next frame. Default 25 = the
-                // original 50 halved ("twice slower falling").
-                StepDrops(col, (int)(dt * _cfg.FallRowsPerSecond), rx: false);
+                // Fall-speed ceiling, rows/sec, FRACTIONAL by accumulation:
+                // 25 rows/s at 60fps is 0.42 rows per frame — an integer
+                // cast of that is 0 every frame and the rain never falls.
+                // The carry bank fractions and spends whole rows.
+                col.FallCarryTx += dt * _cfg.FallRowsPerSecond;
+                int capTx = (int)col.FallCarryTx;
+                col.FallCarryTx -= capTx;
+                StepDrops(col, capTx, rx: false);
+
                 if (_cfg.RxMode)
-                    StepDrops(col, (int)(dt * _cfg.FallRowsPerSecond * 0.5), rx: true);
+                {
+                    col.FallCarryRx += dt * _cfg.FallRowsPerSecond * 0.5;
+                    int capRx = (int)col.FallCarryRx;
+                    col.FallCarryRx -= capRx;
+                    StepDrops(col, capRx, rx: true);
+                }
             }
         }
 
         private void StepDrops(RainColumn col, int maxAdvance, bool rx)
         {
             double budget = Math.Min(rx ? col.RxBudget : col.Budget, 600);
+            DebugBudget = budget;   // title-channel instrumentation
             int glyphCount = _atlas.GlyphChars.Length;
             int sameColor = 0;
             for (int i = col.Drops.Count - 1; i >= 0; i--)
@@ -758,14 +801,21 @@ namespace AutoCommand.Matrix
                     ClearCell(dstBase, stride, xPrev, y, _atlas.CellW, _atlas.CellH);
                 ClearCell(dstBase, stride, xNow, y, _atlas.CellW, _atlas.CellH);
                 if (xNow >= 0 && xNow + _atlas.CellW <= _w && w.Alpha > 0.004)
+                {
                     BlitClipped(dstBase, stride, set[w.Glyph], _atlas.CellW, _atlas.CellH,
                         xNow, y, _w, _h, (int)(256 * w.Alpha));
+                    DebugDraws++;
+                }
             }
 
             // The lead(s): shadow, soft bloom, the single brightest glyph —
             // redrawn every frame, with last frame's bounds cleared.
             for (int i = col.Drops.Count - 1; i >= 0; i--)
+            {
                 RenderHead(col, col.Drops[i], xNow, xPrev);
+                DebugDraws++;
+            }
+            DebugDrops = col.Drops.Count;
 
             col.LastDrawnX = xNow;
         }

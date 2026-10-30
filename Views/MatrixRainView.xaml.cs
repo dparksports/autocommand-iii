@@ -47,7 +47,9 @@ namespace AutoCommand.Views
 
         /// <summary>Wire up against the Process Monitor's live table. Both
         /// views are constructed at startup, but be resilient anyway: retry
-        /// briefly if the monitor view has not registered yet.</summary>
+        /// briefly if the monitor view has not registered yet. Anything that
+        /// throws lands IN the strip — a silent "attaching..." is exactly
+        /// how the first cut hid its failure.</summary>
         private void Attach()
         {
             if (_renderer != null || _attaching) return;
@@ -56,7 +58,9 @@ namespace AutoCommand.Views
             var tracked = SvchostMonitorView.Current?.TrackedTable;
             if (tracked == null)
             {
-                // Monitor view not registered yet — retry shortly.
+                // Monitor view not registered yet — retry shortly, and say so.
+                _attachRetries++;
+                DiagText.Text = $"rain: attaching (waiting for the Process Monitor, try {_attachRetries})...";
                 _attaching = false;
                 var retry = new System.Windows.Threading.DispatcherTimer
                 {
@@ -67,14 +71,27 @@ namespace AutoCommand.Views
                 return;
             }
 
-            _cfg = MatrixRainConfig.LoadOrDefault();
-            _feed = new MatrixRainFeed(tracked);
-            _renderer = new MatrixRenderer(AmbientImage, RainImage, () => _feed.Latest, _cfg);
-            _renderer.SetSurfaceSize(ActualWidth, ActualHeight);
+            try
+            {
+                _cfg = MatrixRainConfig.LoadOrDefault();
+                _feed = new MatrixRainFeed(tracked);
+                _renderer = new MatrixRenderer(AmbientImage, RainImage, () => _feed.Latest, _cfg);
+                _renderer.SetSurfaceSize(ActualWidth, ActualHeight);
+            }
+            catch (Exception ex)
+            {
+                DiagText.Text = "rain: attach failed — " + ex.Message +
+                                "  (see Debug output for the full trace)";
+                Debug.WriteLine("RainTab attach failed: " + ex);
+                _attaching = false;
+                return;
+            }
             _attaching = false;
 
             ApplyVisibility();
         }
+
+        private int _attachRetries;
 
         /// <summary>Render only while the tab is on screen — a hidden tab
         /// costs nothing.</summary>
