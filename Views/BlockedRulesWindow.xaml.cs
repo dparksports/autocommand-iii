@@ -275,6 +275,8 @@ namespace AutoCommand.Views
                     "Consolidate legacy", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             var (targets, removedIn, migratedOut) = await FirewallService.Instance.ConsolidateLegacyIpBlocksAsync();
+            BlocksStore.LogFleet("consolidated",
+                $"{targets} target(s): {removedIn} inbound deleted, {migratedOut} migrated to v2 naming", "manage-all");
             StatusText.Text = $"Consolidated {targets} target(s): {removedIn} redundant inbound rule(s) deleted, {migratedOut} migrated to v2 naming.";
             await ReloadAsync();
         }
@@ -284,6 +286,8 @@ namespace AutoCommand.Views
             if (MessageBox.Show("Re-enable ALL AutoCommand block rules? (Undoes 'Restore Internet'.)",
                     "Re-enable", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             var res = await FirewallService.Instance.SetAllBlocksEnabledAsync(true);
+            BlocksStore.LogFleet("fleet-enabled",
+                $"{res.Changed}/{res.Matched} rule(s) re-enabled", "manage-all");
             StatusText.Text = $"Re-enabled AutoCommand blocks ({res.Changed} rule(s) changed).";
             await ReloadAsync();
         }
@@ -305,6 +309,9 @@ namespace AutoCommand.Views
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
             var res = await FirewallService.Instance.SetAllBlocksEnabledAsync(true, skipRisky: true);
+            BlocksStore.LogFleet("fleet-enabled",
+                $"{res.Changed} rule(s) restored, {res.SkippedRisky} risky rule(s) kept disabled",
+                "restore-except-risky");
             StatusText.Text = $"Restored {res.Changed} rule(s); kept {res.SkippedRisky} risky rule(s) disabled.";
             await ReloadAsync();
         }

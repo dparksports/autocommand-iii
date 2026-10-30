@@ -259,6 +259,12 @@ namespace AutoCommand
                     dnsNote = $"Could not flush DNS automatically ({ex.Message}); run  ipconfig /flushdns  manually.";
                 }
 
+                // Fleet ops bypass SetStatuses by design — log the incident
+                // so the Blocks tab's audit digest can answer "when did all
+                // my blocks go off, and how far did it reach".
+                BlocksStore.LogFleet("fleet-disabled",
+                    $"{result.Changed}/{result.Matched} rule(s) disabled", "panic-button");
+
                 string extra = result.FirstError != null ? $"\nFirst error: {result.FirstError}" : "";
                 MessageBox.Show(
                     $"Disabled {result.Changed} of {result.Matched} AutoCommand block rule(s).{extra}\n\n" +

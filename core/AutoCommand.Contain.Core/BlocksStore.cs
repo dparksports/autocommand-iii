@@ -628,5 +628,16 @@ namespace AutoCommand.Contain.Core
         public static string ServiceGroupKey(BlockRecord r) => _default.ServiceGroupKey(r);
         public static string ClassForPath(string path) => _default.ClassForPath(path);
         public static void AppendEvent(string action, string kind, string key, string detail, string origin) => _default.AppendEvent(action, kind, key, detail, origin);
+
+        /// <summary>
+        /// Fleet-wide operation (panic button, re-enable all, restore-except-
+        /// risky, consolidate legacy): rules changed en masse but per-target
+        /// store statuses intentionally do NOT flip, so this is a pure audit
+        /// event — without it the log cannot answer "when did all my blocks
+        /// go off and come back". Origins: panic-button, manage-all,
+        /// restore-except-risky.
+        /// </summary>
+        public static void LogFleet(string action, string detail, string origin) =>
+            _default.AppendEvent(action, "-", "-", detail, origin);
     }
 }

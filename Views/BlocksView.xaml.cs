@@ -202,7 +202,7 @@ namespace AutoCommand.Views
             InitializeComponent();
             _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
             _toastTimer.Tick += (s, a) => HideToast();
-            IsVisibleChanged += (s, e) => { if (IsVisible) _ = ReloadAsync(); };
+            IsVisibleChanged += (s, e) => { if (IsVisible) { _ = ReloadAsync(); MaybeShowAuditDigest(); } };
             Loaded += (s, e) => _ = ReloadAsync();
         }
 
@@ -1050,6 +1050,73 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                 BlocksStore.SetStatuses(toOff, "off", "undo");
             }
             await ReloadAsync();
+        }
+
+        // ── audit digest ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The notification contract for audit events: everything is recorded
+        /// silently, and surfaced here in aggregate — ONE toast per visit to
+        /// the tab, counts by category, never one toast per event. A marker
+        /// file (audit-seen.txt beside the store) tracks what the user has
+        /// already been shown; the first visit adopts history silently so a
+        /// fresh install doesn't replay the whole log.
+        /// </summary>
+        private void MaybeShowAuditDigest()
+        {
+            try
+            {
+                string marker = AuditTrail.VisitMarkerPath(BlocksStore.EventLogPath);
+                DateTime lastSeen = AuditTrail.ReadSeenUtc(marker);
+
+                if (!File.Exists(BlocksStore.EventLogPath)) return;
+
+                using var fs = new FileStream(BlocksStore.EventLogPath, FileMode.Open,
+                    FileAccess.Read, FileShare.ReadWrite);
+                int tail = (int)Math.Min(fs.Length, 256 * 1024);
+                fs.Seek(-tail, SeekOrigin.End);
+                using var sr = new StreamReader(fs);
+
+                int fleet = 0, toggles = 0, paused = 0, resumed = 0, created = 0, removed = 0;
+                DateTime newest = lastSeen;
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    var f = line.Split('|');
+                    if (f.Length < 6) continue;
+                    if (!DateTime.TryParse(f[0], null,
+                            System.Globalization.DateTimeStyles.RoundtripKind, out var utc)) continue;
+                    if (utc <= lastSeen) continue;
+                    if (utc > newest) newest = utc;
+                    switch (f[1])
+                    {
+                        case "fleet-disabled":
+                        case "fleet-enabled":
+                        case "consolidated": fleet++; break;
+                        case "rule-toggled": toggles++; break;
+                        case "paused": paused++; break;
+                        case "resumed": resumed++; break;
+                        case "created": created++; break;
+                        case "removed": removed++; break;
+                    }
+                }
+
+                var parts = new List<string>();
+                if (fleet > 0) parts.Add($"{fleet} fleet operation(s)");
+                if (toggles > 0) parts.Add($"{toggles} manual rule toggle(s)");
+                if (paused > 0) parts.Add($"{paused} block(s) paused");
+                if (resumed > 0) parts.Add($"{resumed} block(s) resumed");
+                if (removed > 0) parts.Add($"{removed} block(s) removed");
+                if (created > 0) parts.Add($"{created} new block(s)");
+
+                if (lastSeen == DateTime.MinValue) parts.Clear();   // first visit: adopt, don't replay
+
+                if (parts.Count > 0)
+                    ShowBulkToast("Since your last visit — " + string.Join(" · ", parts), null);
+
+                AuditTrail.MarkSeenUtc(marker, newest);
+            }
+            catch { /* the digest is best-effort; the log stays authoritative */ }
         }
 
         // ── restore guide ─────────────────────────────────────────────────

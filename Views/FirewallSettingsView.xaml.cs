@@ -144,6 +144,11 @@ namespace AutoCommand.Views
             bool newState = !rule.Enabled;
             await FirewallService.Instance.ToggleRuleAsync(rule.Name, newState);
             rule.Enabled = newState;
+            // Rule-level toggles are invisible to the Blocks tab's pause
+            // history (no store status flips) — audit them so a hand-toggled
+            // AC-BLOCK rule still answers "who turned this off, when".
+            BlocksStore.AppendEvent("rule-toggled", "-", rule.Name,
+                newState ? "enabled" : "disabled", "firewall-tab");
             // Adopt the change into the baseline so the enforcer doesn't revert it
             FirewallBaselineManager.UpdateRuleState(rule.Name, newState);
         }

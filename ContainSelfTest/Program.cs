@@ -285,6 +285,86 @@ Check("quiet: app-blocked image (sibling path) is not quiet",
 Check("quiet: untouched enabled ip is quiet; paused rule never listed",
       quietTargets.Any(t => t.Ip == "9.9.9.9") && quietTargets.All(t => t.Ip != "7.7.7.7"));
 
+// ─────────────────────────────────────────────────────────────────────
+// 4. AuditTrail — the Audit tab's grouping + language. Synthetic lines
+//    only (the same format AppendEvent writes); nothing opens the real
+//    %LOCALAPPDATA% event log.
+// ─────────────────────────────────────────────────────────────────────
+var auditT0 = DateTime.UtcNow;
+string AuditLine(int sec, string action, string kind, string key, string detail, string origin) =>
+    $"{auditT0.AddSeconds(sec):O}|{action}|{kind}|{key}|{detail}|{origin}";
+
+var auditLines = new List<string>
+{
+    "garbage line with no pipes",
+    AuditLine(0,  "created", "ip",   "1.2.3.4",    "wuauserv/Microsoft/Azure",        "monitor"),
+    AuditLine(2,  "created", "ip",   "5.6.7.8",    "cryptsvc/Akamai (MS CDN)",        "monitor"),
+    AuditLine(4,  "created", "proc", @"C:\P\m.exe","msmpeng/Windows Defender",         "monitor"),
+    AuditLine(600,"created", "ip",   "9.9.9.9",    "netprofm/Unclassified",           "monitor"),  // 10 min later: new incident
+    AuditLine(610,"paused",  "-",    "-",          "162 target(s) via restore-guide", "restore-guide"),
+    AuditLine(700,"resumed", "-",    "-",          "23 target(s) via blocks-tab",     "blocks-tab"),
+    AuditLine(800,"fleet-disabled", "-", "-",      "490/500 rule(s) disabled",        "panic-button"),
+    AuditLine(900,"fleet-enabled",  "-", "-",      "565/565 rule(s) re-enabled",      "manage-all"),
+    AuditLine(950,"rule-toggled","-", "AC-BLOCK-APP bash.exe (Out)", "disabled",     "firewall-tab"),
+    AuditLine(960,"external-modified","app","bash.exe","disabled by wf.msc; restored","os-audit"),
+    AuditLine(970,"removed", "ip",   "142.251.210.131","cryptsvc/after 03d 13h 38m",  "monitor"),
+};
+
+int auditParsed = auditLines.Count(l => AuditTrail.ParseLine(l) != null);
+Check("audit: parse skips garbage, keeps all 11", auditParsed == 11, $"{auditParsed}");
+
+var incidents = AuditTrail.BuildIncidents(
+    auditLines.Select(AuditTrail.ParseLine).Where(e => e != null));
+
+// grouping: [burst of 3] [burst of 1] [paused] [resumed] [fleet] [fleet] [toggled] [external] [removed]
+Check("audit: 9 incidents from 11 events", incidents.Count == 9, $"{incidents.Count}");
+var burst = incidents[0];
+Check("audit: monitor burst collapses with per-kind counts",
+      burst.Count == 3 && burst.KindCounts["ip"] == 2 && burst.KindCounts["proc"] == 1,
+      $"count={burst.Count}");
+Check("audit: burst sentence says addresses and programs",
+      burst.Sentence.Contains("2 addresses") && burst.Sentence.Contains("1 program"),
+      burst.Sentence);
+Check("audit: burst meta carries the owning service key", burst.Meta.Contains("wuauserv"), burst.Meta);
+
+var pause = incidents.First(i => i.EventsAction == "paused");
+Check("audit: bulk pause counts targets from the detail line",
+      pause.Count == 162 && pause.Sentence.Contains("162"), pause.Sentence);
+Check("audit: restore-guide pause names the actor, not 'You'",
+      pause.Sentence.StartsWith("The restore guide"), pause.Sentence);
+
+var panic = incidents.First(i => i.EventsAction == "fleet-disabled");
+Check("audit: panic stands alone and says who pressed it",
+      panic.Category == "fleet" && panic.Severity == "resolved" &&
+      panic.Sentence.Contains("panic button"), panic.Sentence);
+var reen = incidents.First(i => i.EventsAction == "fleet-enabled");
+Check("audit: re-enable-all is its own incident", reen.Count == 1 && !ReferenceEquals(reen, panic));
+
+var toggle = incidents.First(i => i.EventsAction == "rule-toggled");
+Check("audit: manual rule toggle reads as a sentence",
+      toggle.Category == "pause" && toggle.Sentence.Contains("bash.exe") &&
+      toggle.Sentence.Contains("OFF"), toggle.Sentence);
+
+var ext = incidents.First(i => i.EventsAction == "external-modified");
+Check("audit: external change restored is 'resolved', not 'attention'",
+      ext.Category == "external" && ext.Severity == "resolved", ext.Severity);
+Check("audit: unrestored external change would be 'attention'",
+      AuditTrail.SeverityOf("external-modified", "disabled by netsh") == "attention");
+
+var gone = incidents.First(i => i.EventsAction == "removed");
+Check("audit: expiry sentence names the target",
+      gone.Sentence.Contains("142.251.210.131"), gone.Sentence);
+
+Check("audit: every incident has a day header", incidents.All(i => i.DayHeader.Length > 0));
+string auditMarker = Path.Combine(Path.GetTempPath(), "audit-seen-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Check("audit: unseen marker reads MinValue", AuditTrail.ReadSeenUtc(auditMarker) == DateTime.MinValue);
+    AuditTrail.MarkSeenUtc(auditMarker, auditT0);
+    Check("audit: marker round-trips UTC", AuditTrail.ReadSeenUtc(auditMarker) == auditT0);
+}
+finally { try { File.Delete(auditMarker); } catch { } }
+
 Console.WriteLine();
 Console.WriteLine(failures == 0 ? "ALL CONTAIN SELF-TESTS PASSED" : $"{failures} CHECK(S) FAILED");
 return failures == 0 ? 0 : 1;
