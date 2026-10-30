@@ -39,7 +39,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Row="2">
-                            <CheckBox x:Name="AgentMutatingCheck" Content="Allow mutating actions (block IP, kill process, disable task) — every single action asks me first"
+                            <CheckBox x:Name="AgentMutatingCheck" Content="Allow gate requests (open/close a temporary block gate) — every single request asks me first"
                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"
                                       Checked="AgentMutatingCheck_Changed" Unchecked="AgentMutatingCheck_Changed"/>
                             <CheckBox x:Name="AgentAutostartCheck" Content="Start the session automatically whenever AutoCommand runs"
