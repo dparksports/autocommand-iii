@@ -3,9 +3,7 @@
   <!-- Offline self-test for the Taskhostw Spawns tab's attribution engine.
        Phase 4 of the AutoCommand II extraction (REWRITE.md): the engines
        live in core\AutoCommand.Forensics.Core and this harness references
-       the library — what runs here is the shipped assembly itself. The
-       known-tasks knowledge base still ships as loose content (the app
-       loads it the same way), so this harness copies it to its output.
+       the library — what runs here is the shipped assembly itself.
        Excluded from the app build (AutoCommand.csproj Compile Remove). -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -22,9 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\core\AutoCommand.Forensics.Core\AutoCommand.Forensics.Core.csproj" />
-    <Content Include="..\Assets\known-tasks.json" Link="Assets\known-tasks.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>
