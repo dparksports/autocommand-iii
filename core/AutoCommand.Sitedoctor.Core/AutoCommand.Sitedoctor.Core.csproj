@@ -10,7 +10,7 @@
 
        The Live half (DependencyBlockService.Live.cs) moved WITH the rest:
        its old blockers dissolved in earlier phases — the transmissions
-       archive lives in Intercept and the block-hit feed in Contain. -->
+       archive lives in Engines.Watch and the block-hit feed in Contain. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <AssemblyName>AutoCommand.Sitedoctor.Core</AssemblyName>
@@ -28,9 +28,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Sitedoctor -> Contain -> Intercept -> NetWatch: fingerprints read
-         TransmissionRecord (Intercept); the live dependency pass joins the
-         block-hit feed and the blocks ledger (Contain). -->
+    <!-- Sitedoctor -> Contain -> NetWatch (the Intercept layer was
+         removed): fingerprints read TransmissionRecord (Engines.Watch);
+         the live dependency pass joins the block-hit feed and the blocks
+         ledger (Contain). -->
     <ProjectReference Include="..\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
     <!-- F# diagnosis engines (AutoCommand III): verdict, fingerprint and
          probe services now live here; the C# twins were deleted -->

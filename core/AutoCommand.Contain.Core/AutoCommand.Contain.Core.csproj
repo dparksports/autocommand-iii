@@ -29,10 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- IpClassifier/ProcessRunner/SysmonArchive (NetWatch) and
-         TlsSni/SysmonConnectWatcher (Intercept) — layering:
-         Contain → Intercept → NetWatch -->
-    <ProjectReference Include="..\AutoCommand.Intercept.Core\AutoCommand.Intercept.Core.csproj" />
+    <!-- IpClassifier/ProcessRunner/SysmonArchive — direct edge since the
+         Intercept layer was removed (it used to carry NetWatch transitively:
+         Contain → Intercept → NetWatch) -->
+    <ProjectReference Include="..\AutoCommand.NetWatch.Core\AutoCommand.NetWatch.Core.csproj" />
     <!-- Vendored identity engine — SvchostIdentityService decodes instances
          and BlockAttributionService tags blocks with service identity -->
     <ProjectReference Include="..\..\svchost-watch\SvchostAnalyzer.Core\SvchostAnalyzer.Core.csproj" />

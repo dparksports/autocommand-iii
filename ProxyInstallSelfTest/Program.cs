@@ -23,7 +23,6 @@ using AgentBridgeService = AutoCommand.Agent.Core.AgentBridgeService;
 using McpClientCatalog = AutoCommand.Agent.Core.McpClientCatalog;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 

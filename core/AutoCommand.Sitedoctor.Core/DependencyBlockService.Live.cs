@@ -1,4 +1,3 @@
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using System;
 using AutoCommand.Contain.Core;

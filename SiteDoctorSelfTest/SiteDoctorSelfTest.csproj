@@ -3,7 +3,7 @@
   <!-- Self-test for the "Why is this site slow?" pipeline. Phase 5 of the
        AutoCommand II extraction (REWRITE.md): the engines live in
        core\AutoCommand.Sitedoctor.Core (fingerprint/verdict/dependency)
-       with TransmissionRecord from the Intercept core — this harness
+       with TransmissionRecord from Engines.Watch — this harness
        references the library and runs the shipped assemblies.
 
        Offline sections drive the fingerprint engine with synthetic archive

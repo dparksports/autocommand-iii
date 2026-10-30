@@ -359,7 +359,8 @@ type TransmissionsPipelineService private () as this =
                 |> Seq.map (fun s -> s.Clone())))
 
     /// <summary>
-    /// Entry point for layer-3 intercept records (InterceptProxyService):
+    /// Entry point for layer-3 intercept records (the MITM proxy that
+    /// produced them was removed — kept as the archive's ingest seam):
     /// same treatment as captured flows — HTTP decode for message
     /// counts, archive + body cache, per-image tally, UI event. Works
     /// even when the watch is off; the archive makes rows visible

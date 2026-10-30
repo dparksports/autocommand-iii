@@ -10,7 +10,6 @@
 // Defender; those halves are exercised by the app itself.
 using System;
 using AutoCommand.Contain.Core;
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using System.IO;
 using System.Linq;

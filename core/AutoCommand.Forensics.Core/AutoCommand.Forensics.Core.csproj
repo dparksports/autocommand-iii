@@ -21,12 +21,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The top of the core layering: Forensics -> Contain -> Intercept ->
-         NetWatch. TraceMetricsService alone touches all three (catalog +
-         svchost identity, transmissions archive, sysmon archive + TCP
-         table + classification); the others touch one or two. -->
+    <!-- The top of the core layering: Forensics -> Contain -> NetWatch
+         (the Intercept layer was removed). TraceMetricsService alone
+         touches all three (catalog + svchost identity, transmissions
+         archive, sysmon archive + TCP table + classification); the
+         others touch one or two. -->
     <ProjectReference Include="..\AutoCommand.Contain.Core\AutoCommand.Contain.Core.csproj" />
-    <ProjectReference Include="..\AutoCommand.Intercept.Core\AutoCommand.Intercept.Core.csproj" />
     <ProjectReference Include="..\AutoCommand.NetWatch.Core\AutoCommand.NetWatch.Core.csproj" />
   </ItemGroup>
 

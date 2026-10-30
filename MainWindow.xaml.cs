@@ -2,7 +2,6 @@
 using AutoCommand.Agent.Core;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 using System.Collections.Generic;
@@ -34,11 +33,6 @@ namespace AutoCommand
 
             // Live version from the assembly instead of a hardcoded string
             VersionText.Text = $"AutoCommand v{AppVersion}";
-
-            // Layer-3 crash safety: if a previous run died mid-intercept, the
-            // journal on disk still describes the hooks it installed — undo
-            // them (proxy, firewall rule, CA) before anything else runs.
-            InterceptSystemHooks.RecoverAfterCrash();
 
             InitializeEnforcer();
 
@@ -213,10 +207,6 @@ namespace AutoCommand
             // Transmissions pipeline drains what the capture flush finalized
             // (up to its 3s budget), then releases its capture reference.
             TransmissionsPipelineService.Shared.Stop();
-
-            // Layer 3 must never outlive the app: stop restores the system
-            // proxy, removes the QUIC block rule and untrusts the CA.
-            InterceptProxyService.Shared.StopSession("app exit");
 
             TlsKeylogService.CleanupAtExit(); // drop the rotated TLS keylog leftover
             base.OnClosed(e);

@@ -1,7 +1,6 @@
 using AutoCommand.Models;
 using AutoCommand.Contain.Core;
 using AutoCommand.Forensics.Core;
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 
 // Replays the last hours of Sysmon + Task Scheduler history through the same

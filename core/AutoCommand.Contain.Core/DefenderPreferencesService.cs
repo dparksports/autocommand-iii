@@ -1,7 +1,6 @@
 using AutoCommand.NetWatch.Core;
 using System;
 using AutoCommand.Contain.Core;
-using AutoCommand.Intercept.Core;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;

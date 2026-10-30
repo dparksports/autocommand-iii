@@ -47,13 +47,6 @@
          renders the monitor's LIVE shared row table, never its own
          watcher/sniffer, so the grid and the rain are one source of truth. -->
     <ProjectReference Include="MatrixRain\AutoCommand.MatrixRain.Core\AutoCommand.MatrixRain.Core.csproj" />
-    <!-- Intercept core (phase 2 of the AutoCommand II extraction, see
-         REWRITE.md): sniffer, stream capture, TLS decrypt/keylog/SNI,
-         loopback proxy + CA + system hooks, Sysmon connect watcher, and
-         the transmissions pipeline/archive with traffic aggregation.
-         Same rules as the NetWatch core: physical move, namespaces
-         unchanged, self-tests consume the shipped assembly. -->
-    <ProjectReference Include="core\AutoCommand.Intercept.Core\AutoCommand.Intercept.Core.csproj" />
     <!-- Contain core (phase 3 of the AutoCommand II extraction, see
          REWRITE.md): firewall + blocks-store undo ledger, telemetry opt-out
          rules and hosts pins, sinkhole receipts, Defender engines, update

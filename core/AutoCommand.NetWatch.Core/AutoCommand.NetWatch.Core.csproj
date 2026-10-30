@@ -10,10 +10,9 @@
        runs the shipped assembly instead of a source copy. Namespaces can be
        migrated to AutoCommand.NetWatch.* later, cluster by cluster.
 
-       Deliberately NOT here yet: SysmonConnectWatcherService (depends on
-       ImageSpawnWatcherService and TcpStreamCaptureService — Forensics and
-       Intercept clusters) and BlockHitFeedService (depends on
-       FirewallService — Contain cluster). They move when their clusters do. -->
+       Deliberately NOT here: SysmonConnectWatcherService (Engines.Watch —
+       depends on ImageSpawnWatcherService and TcpStreamCaptureService)
+       and BlockHitFeedService (Contain — depends on FirewallService). -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <AssemblyName>AutoCommand.NetWatch.Core</AssemblyName>

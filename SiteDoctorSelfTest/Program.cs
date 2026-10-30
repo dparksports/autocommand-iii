@@ -9,7 +9,6 @@
 // exists to detect, asserted end-to-end.
 using System;
 using AutoCommand.Contain.Core;
-using AutoCommand.Intercept.Core;
 using AutoCommand.NetWatch.Core;
 using AutoCommand.Sitedoctor.Core;
 using System.Collections.Generic;
@@ -121,13 +120,13 @@ var vBlocked = SiteVerdictService.Decide(null, Report(new List<EdgeProbe>
 {
     new() { Ip = "1.2.3.4", TcpError = "connection refused" },
     new() { Ip = "5.6.7.8", TcpError = "no TCP answer in 4000ms" },
-}));
+}), null);
 Check("verdict: all-TCP-failed → Blocked", vBlocked.Kind == VerdictKind.Blocked, vBlocked.Kind.ToString());
 
 var vDrop = SiteVerdictService.Decide(null, Report(new List<EdgeProbe>
 {
     new() { Ip = "47.246.23.220", TcpConnectMs = 30, TlsPlainMs = 54, TlsPlainVersion = "Tls12", TlsDefaultError = "timeout" },
-}, controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 11, TlsMs = 15 } }));
+}, controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 11, TlsMs = 15 } }), null);
 Check("verdict: split hello shapes → HandshakeDropping", vDrop.Kind == VerdictKind.HandshakeDropping, vDrop.Kind.ToString());
 Check("verdict: headline names the DROPPED shape",
     vDrop.Headline.Contains("Windows-default handshake"), vDrop.Headline);
@@ -139,20 +138,20 @@ var vSteer = SiteVerdictService.Decide(null, Report(
         new() { Ips = new List<string> { "1.1.1.1" } },
         new() { Ips = new List<string> { "2.2.2.2" } },
         new() { Ips = new List<string> { "3.3.3.3" } },
-    }));
+    }), null);
 Check("verdict: rotating DNS → Steering", vSteer.Kind == VerdictKind.Steering, vSteer.Kind.ToString());
 
 var vFar = SiteVerdictService.Decide(null, Report(
     new List<EdgeProbe> { new() { Ip = "9.9.9.9", TcpConnectMs = 210, TlsDefaultMs = 320, TlsDefaultVersion = "Tls13", TlsPlainMs = 300, TlsPlainVersion = "Tls12" } },
-    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 10, TlsMs = 15 } }));
+    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 10, TlsMs = 15 } }), null);
 Check("verdict: 20x control latency → FarAway", vFar.Kind == VerdictKind.FarAway, vFar.Kind.ToString());
 
 var vHealthy = SiteVerdictService.Decide(fpCalm, Report(
     new List<EdgeProbe> { new() { Ip = "140.82.114.3", TcpConnectMs = 40, TlsDefaultMs = 60, TlsDefaultVersion = "Tls13", TlsPlainMs = 58, TlsPlainVersion = "Tls12" } },
-    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } }));
+    controls: new List<ControlProbe> { new() { Host = "ctl", TcpConnectMs = 30, TlsMs = 45 } }), null);
 Check("verdict: fast + calm → Healthy", vHealthy.Kind == VerdictKind.Healthy, vHealthy.Kind.ToString());
 
-var vNone = SiteVerdictService.Decide(null, null);
+var vNone = SiteVerdictService.Decide(null, null, null);
 Check("verdict: no evidence → Insufficient", vNone.Kind == VerdictKind.Insufficient, vNone.Kind.ToString());
 
 // ─────────────────────────────────────────────────────────────────────
@@ -360,7 +359,7 @@ var vLive = SiteVerdictService.Decide(null, new SiteProbeReport
             ? new() { Host = "synthetic-ctl", TcpConnectMs = 5, TlsMs = 10 }
             : new() { Host = "localhost", TcpConnectMs = healthyEdge.TcpConnectMs, TlsMs = healthyEdge.TlsDefaultMs },
     },
-});
+}, null);
 Check("live: black-hole edge + healthy control → HandshakeDropping",
     vLive.Kind == VerdictKind.HandshakeDropping, vLive.Kind.ToString());
 
@@ -379,7 +378,7 @@ var vLocalBroken = SiteVerdictService.Decide(null, new SiteProbeReport
     {
         new() { Host = "ctl", TcpConnectMs = 8, Error = "server never answered" },
     },
-});
+}, null);
 Check("live: all handshakes fail incl. control → LocalTlsBroken",
     vLocalBroken.Kind == VerdictKind.LocalTlsBroken, vLocalBroken.Kind.ToString());
 
