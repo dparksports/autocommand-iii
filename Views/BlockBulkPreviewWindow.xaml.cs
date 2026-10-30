@@ -84,7 +84,7 @@ namespace AutoCommand.Views
                 {
                     Text = $"   {g.Targets} target(s) · {g.Rules} rule(s)",
                     FontSize = 11,
-                    Foreground = (Brush)FindResource("MutedBrush"),
+                    Foreground = (Brush)FindResource("MutedTextBrush"),
                 });
                 wrap.Children.Add(head);
                 if (!string.IsNullOrEmpty(g.Warning))

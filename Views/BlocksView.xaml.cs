@@ -284,7 +284,7 @@ namespace AutoCommand.Views
                         EnabledCount = enabled,
                         RulesStale = (t?.StaleRules ?? 0) > 0,
                         ClassBrush = BrushForClass(r),
-                        LastTrafficBrush = (Brush)FindResource("BlocksMutedBrush"),
+                        LastTrafficBrush = (Brush)FindResource("MutedTextBrush"),
                     };
                     vm.CanSelect = vm.HasRules && !vm.RulesEnabled;
                     var gate = AutoCommand.Agent.Core.BlockGateService.Instance.Find(r.Kind, r.Key);
@@ -375,7 +375,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                     {
                         if (!vm.HasRules)
                         {
-                            SetContainment(vm, "—", "—", "BlocksMutedBrush",
+                            SetContainment(vm, "—", "—", "MutedTextBrush",
                                 "No firewall rules exist for this target — nothing to contain.");
                             continue;
                         }
@@ -383,7 +383,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                         {
                             SetContainment(vm, "paused",
                                 vm.PausedShort != null ? "⏸ " + vm.PausedShort : "off",
-                                "BlocksMutedBrush",
+                                "MutedTextBrush",
                                 (vm.PausedInfoToolTip != null ? vm.PausedInfoToolTip + "\n\n" : "") +
                                 "Blocking is OFF — traffic flows by design, so containment is moot.");
                             continue;
@@ -392,7 +392,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                             snap.Instances, vm.Record.Kind, vm.Record.Key);
                         if (worst == null)
                         {
-                            SetContainment(vm, "quiet", "quiet", "BlocksMutedBrush",
+                            SetContainment(vm, "quiet", "quiet", "MutedTextBrush",
                                 "No blocked-connect attempts in the last hour — nothing is even trying " +
                                 "this target. The block may be dead weight (CDN edges rotate).");
                             continue;
@@ -432,7 +432,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
                 catch
                 {
                     foreach (var vm in vms)
-                        SetContainment(vm, "—", "—", "BlocksMutedBrush",
+                        SetContainment(vm, "—", "—", "MutedTextBrush",
                             "Containment join unavailable this refresh (feed, WMI or archive unreadable).");
                 }
 
@@ -552,7 +552,7 @@ $"\nBlocking returns ON automatically at {gate.ExpiresUtc.ToLocalTime():HH:mm}."
             if (c.Contains("Windows component")) return (Brush)FindResource("AccentRedBrush");
             if (c.Contains("Microsoft/Azure")) return (Brush)FindResource("AccentBlueBrush");
             if (c.Contains("Akamai") || c.Contains("Gcore")) return (Brush)FindResource("AccentAmberBrush");
-            return (Brush)FindResource("BlocksMutedBrush");
+            return (Brush)FindResource("MutedTextBrush");
         }
 
         private void Render(List<BlockRowVm> vms)
