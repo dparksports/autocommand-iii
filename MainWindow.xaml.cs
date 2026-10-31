@@ -121,15 +121,41 @@ namespace AutoCommand
         // The renderer knows how wide the rain wants to be (alive columns ×
         // cell); the splitter lets the user take over. Dragging sets the
         // manual flag; double-clicking the splitter returns to auto-fit;
-        // both persist.
+        // both persist. Auto-fit changes are DEBOUNCED: the alive count
+        // churns as connections start and stop, and every width change
+        // re-measures the list's DataGrid — an un-debounced fit spins the
+        // UI on a busy desktop.
+
+        private readonly System.Windows.Threading.DispatcherTimer _rainWidthDebounce =
+            new(System.Windows.Threading.DispatcherPriority.Background)
+            { Interval = TimeSpan.FromSeconds(1) };
+        private double _rainWidthPending = double.NaN;
 
         private void ApplyRainColumnWidth()
         {
             if (_rainWidthManual || _paneState == "grid") return;
             double dip = MatrixRainTab.DesiredWidthDip;
-            if (dip <= 0) return;
+            if (dip <= 0 || Math.Abs(dip - _rainWidth) < 0.5) return;
+            if (_rainWidthDebounce.IsEnabled)
+            {
+                _rainWidthPending = dip;   // settle after the churn quiets down
+                return;
+            }
             _rainWidth = dip;
             RainColumn.Width = new GridLength(dip);
+            _rainWidthDebounce.Start();
+        }
+
+        private void RainWidthDebounce_Tick(object sender, EventArgs e)
+        {
+            _rainWidthDebounce.Stop();
+            if (_rainWidthManual || _paneState == "grid" ||
+                double.IsNaN(_rainWidthPending) ||
+                Math.Abs(_rainWidthPending - _rainWidth) < 0.5) return;
+            _rainWidth = _rainWidthPending;
+            _rainWidthPending = double.NaN;
+            RainColumn.Width = new GridLength(_rainWidth);
+            _rainWidthDebounce.Start();   // keep debouncing while it keeps changing
         }
 
         private void RainSplitter_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
@@ -189,6 +215,7 @@ namespace AutoCommand
             }
             catch { _paneState = "both"; }
             MatrixRainTab.ColumnWidthChanged += ApplyRainColumnWidth;
+            _rainWidthDebounce.Tick += RainWidthDebounce_Tick;
             ApplyPaneState();
 
             // Live version from the assembly instead of a hardcoded string
